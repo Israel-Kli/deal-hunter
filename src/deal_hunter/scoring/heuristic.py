@@ -119,7 +119,8 @@ def score_listing(listing: Listing) -> tuple[float, dict[str, Any]]:
         score += 1.0 if drop >= 5 else 0.5
 
     # 5. RISK (15% → -1.5)
-    if listing.floor is not None and listing.floor >= 3 and not listing.elevator:
+    is_house = any(t in listing.listing_type for t in ["בית פרטי", "קוטג'", "דו משפחתי", "בית"])
+    if not is_house and listing.floor is not None and listing.floor >= 3 and not listing.elevator:
         score -= 0.5; reasons["risk_no_elevator_high_floor"] = True
     if not listing.mamad:
         score -= 0.3; reasons["risk_no_mamad"] = True
