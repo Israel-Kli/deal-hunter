@@ -80,6 +80,7 @@ class AdAdapter:
         max_pages: int = 5,
         request_delay_sec: float = 2.0,
         enrich_details: bool = False,
+        allowed_cities: list[str] | None = None,
     ):
         # Each entry is a full URL path like "/nadlansale" or "/city/tel-aviv".
         # An empty list defaults to the national for-sale board.
@@ -88,6 +89,7 @@ class AdAdapter:
         self.max_pages = max_pages
         self.request_delay = request_delay_sec
         self.enrich_details = enrich_details
+        self.allowed_cities = set(allowed_cities) if allowed_cities else None
 
     # ---- public ScraperAdapter surface ---------------------------------
 
@@ -242,6 +244,8 @@ class AdAdapter:
 
     def _passes_filters(self, listing: Listing) -> str | None:
         s = self.search
+        if self.allowed_cities and listing.city not in self.allowed_cities:
+            return "city_not_allowed"
         if listing.price < s.get("price_min", 0) or listing.price > s.get("price_max", 10**12):
             return "price_out_of_range"
         if listing.rooms is not None:
