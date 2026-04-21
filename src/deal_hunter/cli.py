@@ -6,7 +6,6 @@ import argparse
 import logging
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 
 from deal_hunter import config as cfg_mod
@@ -174,18 +173,39 @@ def cmd_run(args: argparse.Namespace) -> int:
     if args.once:
         run_once(cfg, enrich=args.enrich, max_items=args.max_items)
         return 0
-    interval_sec = cfg.schedule.poll_interval_minutes * 60
-    log.info("Running scheduler loop, interval=%ds", interval_sec)
-    while True:
+
+    from apscheduler.schedulers.blocking import BlockingScheduler
+    from apscheduler.triggers.interval import IntervalTrigger
+    import random
+
+    interval_min = cfg.schedule.poll_interval_minutes
+    jitter_sec = 120  # ±2 min random jitter so sources don't all hit at the same wall-clock second
+
+    log.info("Starting APScheduler, base interval=%dm, jitter=±%ds", interval_min, jitter_sec)
+
+    def _job() -> None:
         try:
             run_once(cfg, enrich=args.enrich)
-        except KeyboardInterrupt:
-            return 0
         except Exception:
             log.exception("run_once failed")
-        log.info("sleeping %ds (next run %s)", interval_sec,
-                 datetime.utcnow().replace(microsecond=0).isoformat())
-        time.sleep(interval_sec)
+
+    scheduler = BlockingScheduler()
+    scheduler.add_job(
+        _job,
+        trigger=IntervalTrigger(
+            minutes=interval_min,
+            jitter=random.randint(0, jitter_sec),
+        ),
+        id="scan-cycle",
+        name="Deal Hunter scan cycle",
+        replace_existing=True,
+        max_instances=1,
+    )
+    try:
+        scheduler.start()
+    except (KeyboardInterrupt, SystemExit):
+        log.info("Scheduler stopped")
+    return 0
 
 
 def _comps_dicts_from_comps(comps: list) -> list[dict]:
