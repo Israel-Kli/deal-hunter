@@ -180,8 +180,8 @@ class ListingsRepo:
         deleted_history = self.conn.execute("DELETE FROM price_history").rowcount
         deleted_comps = self.conn.execute("DELETE FROM comps").rowcount
         deleted_scan_log = self.conn.execute("DELETE FROM scan_log").rowcount
-        self.conn.execute("VACUUM")
         self.conn.commit()
+        self.conn.execute("VACUUM")
         return {
             "listings": deleted_listings,
             "price_history": deleted_history,
