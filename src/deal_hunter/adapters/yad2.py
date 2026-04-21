@@ -141,6 +141,14 @@ class Yad2Adapter:
         if rooms is not None and not (s["rooms_min"] <= rooms <= s["rooms_max"]):
             return None
 
+        # Property type filter (house-only: בית פרטי/קוטג', דו משפחתי)
+        allowed_types = s.get("property_types")
+        if allowed_types:
+            prop = (details.get("property") or {})
+            prop_text = prop.get("text", "")
+            if prop_text not in allowed_types:
+                return None
+
         addr = item.get("address", {}) or {}
         house = addr.get("house", {}) or {}
         floor = house.get("floor")

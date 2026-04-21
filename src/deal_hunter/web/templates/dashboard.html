@@ -22,6 +22,10 @@
   a:hover  { text-decoration:underline; }
   .muted   { color:#6b7280; font-size:12px; }
   .meta    { margin-bottom:10px; }
+  th.sort  { cursor:pointer; user-select:none; }
+  th.sort::after { content:' ⇅'; opacity:.3; }
+  th.sort.sort-asc::after { content:' ↑'; opacity:1; }
+  th.sort.sort-desc::after { content:' ↓'; opacity:1; }
 </style>
 </head>
 <body>
@@ -49,20 +53,30 @@
     <thead>
       <tr>
         <th>ציון</th>
+        <th>עיר</th>
         <th>מקור</th>
         <th>כתובת</th>
-        <th>חדרים</th>
-        <th>מ"ר</th>
-        <th>מחיר</th>
-        <th>₪/מ"ר</th>
-        <th>הערכה</th>
+        <th class="sort" data-key="rooms">חדרים</th>
+        <th class="sort" data-key="sqm">מ"ר בנוי</th>
+        <th class="sort" data-key="price">מחיר</th>
+        <th class="sort" data-key="price_per_sqm">₪/מ"ר</th>
+        <th class="sort" data-key="fair_price_estimate">הערכה</th>
         <th>לינק</th>
       </tr>
     </thead>
     <tbody id="rows"></tbody>
   </table>
+  <div id="scoreModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:100;justify-content:center;align-items:center;">
+    <div style="background:#fff;border-radius:12px;padding:24px;max-width:480px;width:90%;max-height:80vh;overflow-y:auto;position:relative;">
+      <button onclick="closeScore()" style="position:absolute;top:12px;left:12px;background:none;border:none;font-size:20px;cursor:pointer;">✕</button>
+      <h2 style="margin:0 0 16px;font-size:18px;">📊 פירוט ציון</h2>
+      <div id="scoreDetails"></div>
+    </div>
+  </div>
 <script>
 let all = [];
+let sortKey = 'score';
+let sortAsc = false;
 async function load() {
   const r = await fetch('/api/listings');
   const d = await r.json();
@@ -76,18 +90,87 @@ function scoreClass(s) {
   if (s >= 6) return 's-warm';
   return 's-cold';
 }
+function scoreLabel(s) {
+  if (s == null) return '—';
+  if (s >= 8) return '🔥 חזק';
+  if (s >= 6) return '⚡ בינוני';
+  return '❄️ חלש';
+}
+function fmtScoreReasons(reasons) {
+  if (!reasons || !Object.keys(reasons).length) return '<p class="muted">אין נתוני ציון</p>';
+  const map = {
+    price_vs_market: 'מחיר מול שוק',
+    est_yield_pct: 'תשואה משוערת',
+    amenity_bonus: 'בונוס מתקנים',
+    private_seller: 'מוכר פרטי',
+    price_drop_pct: 'ירידת מחיר',
+    risk_no_elevator_high_floor: 'סיכון: ללא מעלית בקומה גבוהה',
+    risk_no_mamad: 'סיכון: ללא ממ"ד',
+    risk_liquidity: 'סיכון: נזילות',
+    market_band: 'טווח שוק',
+    market_band_source: 'מקור טווח שוק',
+    final: 'ציון סופי',
+  };
+  const labels = {
+    comps: 'עסקאות סגורות',
+    market_refs: 'התייחסות שוק',
+    'exceptional (>15% below band)': 'מצוין (>15% מתחת לטווח)',
+    'below band': 'מתחת לטווח',
+    'below midpoint': 'מתחת לאמצע הטווח',
+    'in band': 'בתוך הטווח',
+    'above band': 'מעל הטווח',
+    'much above band': 'הרבה מעל הטווח',
+  };
+  let html = '';
+  for (const [key, val] of Object.entries(reasons)) {
+    if (key === 'final') {
+      html += `<div style="margin-top:12px;padding:12px;background:#f0f4ff;border-radius:8px;font-weight:700;font-size:16px;">ציון סופי: ${val}/10</div>`;
+      continue;
+    }
+    if (key === 'market_band') {
+      const [lo, hi] = val;
+      html += `<div><b>${map[key] || key}:</b> ₪${lo?.toLocaleString()} – ₪${hi?.toLocaleString()}/מ״ר</div>`;
+      continue;
+    }
+    const displayVal = typeof val === 'boolean' ? (val ? '✓' : '✗') :
+      (typeof val === 'number' ? (key === 'est_yield_pct' ? `${val}%` : key === 'price_drop_pct' ? `${val}%` : val) : labels[val] || val);
+    html += `<div><b>${map[key] || key}:</b> ${displayVal}</div>`;
+  }
+  return html;
+}
+function showScore(listing) {
+  document.getElementById('scoreDetails').innerHTML = fmtScoreReasons(listing.score_reasons);
+  document.getElementById('scoreModal').style.display = 'flex';
+}
+function closeScore() {
+  document.getElementById('scoreModal').style.display = 'none';
+}
+document.getElementById('scoreModal').addEventListener('click', function(e) {
+  if (e.target === this) closeScore();
+});
+function doSort(key) {
+  if (sortKey === key) { sortAsc = !sortAsc; } else { sortKey = key; sortAsc = false; }
+  render();
+}
 function render() {
   const q = document.getElementById('q').value.trim();
   const src = document.getElementById('src').value;
   const min = parseFloat(document.getElementById('minScore').value);
-  const rows = all.filter(l => {
+  let rows = all.filter(l => {
     if (src && l.source !== src) return false;
     if ((l.score ?? 0) < min) return false;
-    if (q && !(l.address || '').includes(q) && !(l.neighborhood || '').includes(q)) return false;
+    if (q && !(l.address || '').includes(q) && !(l.neighborhood || '').includes(q) && !(l.city || '').includes(q)) return false;
     return true;
-  }).map(l => `
+  });
+  rows.sort((a, b) => {
+    const av = a[sortKey] ?? 0;
+    const bv = b[sortKey] ?? 0;
+    return sortAsc ? av - bv : bv - av;
+  });
+  const html = rows.map(l => `
     <tr>
-      <td><span class="score ${scoreClass(l.score)}">${l.score ?? '—'}</span></td>
+      <td><span class="score ${scoreClass(l.score)}" style="cursor:pointer" onclick="showScore(${JSON.stringify(JSON.stringify(l.score_reasons || {}))})">${l.score ?? '—'}<br><small>${scoreLabel(l.score)}</small></span></td>
+      <td>${l.city || '—'}</td>
       <td><span class="src">${l.source}</span></td>
       <td>${l.address || '—'}</td>
       <td>${l.rooms ?? '—'}</td>
@@ -97,11 +180,16 @@ function render() {
       <td>${l.fair_price_estimate ? '₪' + l.fair_price_estimate.toLocaleString() : '—'}</td>
       <td><a href="${l.url}" target="_blank">↗</a></td>
     </tr>`).join('');
-  document.getElementById('rows').innerHTML = rows || '<tr><td colspan="9" class="muted">אין תוצאות</td></tr>';
+  document.getElementById('rows').innerHTML = html || '<tr><td colspan="10" class="muted">אין תוצאות</td></tr>';
+  document.querySelectorAll('th.sort').forEach(th => {
+    th.classList.toggle('sort-asc', th.dataset.key === sortKey && sortAsc);
+    th.classList.toggle('sort-desc', th.dataset.key === sortKey && !sortAsc);
+  });
 }
 document.getElementById('q').addEventListener('input', render);
 document.getElementById('src').addEventListener('change', render);
 document.getElementById('minScore').addEventListener('change', render);
+document.querySelectorAll('th.sort').forEach(th => th.addEventListener('click', () => doSort(th.dataset.key)));
 load();
 setInterval(load, 30000);
 </script>
