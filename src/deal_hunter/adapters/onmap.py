@@ -78,6 +78,7 @@ class OnMapAdapter:
     # ---- internals ------------------------------------------------------
 
     def _iter_city(self, city_slug: str) -> Iterable[Listing]:
+        filter_stats: dict[str, int] = {}
         for page in range(self.max_pages):
             skip = page * PAGE_SIZE
             url = self._build_feed_url(city_slug, skip)
@@ -90,12 +91,18 @@ class OnMapAdapter:
                 break
             log.info("OnMap %s skip=%d: %d items", city_slug, skip, len(items))
             for raw in items:
-                listing = self._parse(raw, city_slug)
+                listing, reason = self._parse(raw, city_slug)
+                if reason:
+                    filter_stats[reason] = filter_stats.get(reason, 0) + 1
                 if listing is not None:
                     yield listing
             if not (data.get("meta") or {}).get("hasNextPage"):
                 break
             time.sleep(self.request_delay + random.uniform(0.2, 0.8))
+        if filter_stats:
+            total_filtered = sum(filter_stats.values())
+            summary = ", ".join(f"{k}: {v}" for k, v in sorted(filter_stats.items(), key=lambda x: -x[1]))
+            log.info("OnMap %s filter stats (%d filtered): %s", city_slug, total_filtered, summary)
 
     def _build_feed_url(self, city_slug: str, skip: int) -> str:
         params = [
@@ -110,31 +117,31 @@ class OnMapAdapter:
         ]
         return f"{FEED_URL}?{urlencode(params)}"
 
-    def _parse(self, item: dict[str, Any], city_slug: str) -> Listing | None:
+    def _parse(self, item: dict[str, Any], city_slug: str) -> tuple[Listing | None, str | None]:
         s = self.search
 
         # Only residential buy listings priced in ILS
         if item.get("search_option") != "buy":
-            return None
+            return None, "not_buy"
         if (item.get("currency") or "ILS") != "ILS":
-            return None
+            return None, "not_ils"
 
         source_id = item.get("id")
         if not source_id:
-            return None
+            return None, "no_source_id"
 
         price = item.get("price")
         if not isinstance(price, (int, float)) or price <= 0:
-            return None
+            return None, "bad_price"
         price = int(price)
         if price < s.get("price_min", 0) or price > s.get("price_max", 10**12):
-            return None
+            return None, "price_out_of_range"
 
         info = item.get("additional_info") or {}
         rooms = info.get("rooms")
         if isinstance(rooms, (int, float)):
             if not (s.get("rooms_min", 0) <= float(rooms) <= s.get("rooms_max", 99)):
-                return None
+                return None, "rooms_out_of_range"
             rooms_f = float(rooms)
         else:
             rooms_f = None
@@ -142,14 +149,14 @@ class OnMapAdapter:
         area = info.get("area") or {}
         sqm = area.get("base") if isinstance(area.get("base"), (int, float)) else None
         if s.get("min_sqm") and sqm and sqm < s["min_sqm"]:
-            return None
+            return None, "sqm_too_small"
         sqm_i = int(sqm) if sqm else None
 
         floor_obj = info.get("floor") or {}
         floor_val = floor_obj.get("on_the")
         floor_i = int(floor_val) if isinstance(floor_val, (int, float)) else None
         if s.get("exclude_ground_floor") and floor_i == 0:
-            return None
+            return None, "ground_floor"
 
         addr = item.get("address") or {}
         he = addr.get("he") or {}
@@ -172,7 +179,7 @@ class OnMapAdapter:
         if max_age and publish_dt:
             cutoff = datetime.now(timezone.utc) - timedelta(days=max_age)
             if publish_dt < cutoff:
-                return None
+                return None, "too_old"
 
         images = _extract_image_urls(item.get("images") or [])
 
@@ -210,6 +217,10 @@ class OnMapAdapter:
             images=images,
             tags=tags,
             lat=lat,
+            lon=lon,
+            publish_date=publish_dt.strftime("%Y-%m-%d") if publish_dt else "",
+            source_payload={"_city_slug": city_slug, "_slug": slug},
+        ), None
             lon=lon,
             publish_date=publish_dt.strftime("%Y-%m-%d") if publish_dt else "",
             source_payload={"_city_slug": city_slug, "_slug": slug},
