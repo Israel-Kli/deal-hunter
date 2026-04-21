@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import http.server
 import json
 import logging
@@ -17,6 +18,8 @@ TEMPLATES = Path(__file__).parent / "templates"
 
 def _make_handler(cfg: Config):
     db_path = Path(cfg.data_dir) / "deal-hunter.db"
+    _scan_lock = threading.Lock()
+    _scan_in_progress = [False]
 
     class H(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *a, **kw):
@@ -89,6 +92,35 @@ def _make_handler(cfg: Config):
                 with ListingsRepo(db_path) as repo:
                     deleted = repo.reset_all()
                 payload = {"status": "ok", "deleted": deleted}
+                body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if self.path == "/api/scan":
+                if _scan_in_progress[0]:
+                    body = json.dumps({"status": "error", "error": "Scan already in progress"}, ensure_ascii=False).encode("utf-8")
+                    self.send_response(409)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                def _run_scan():
+                    _scan_in_progress[0] = True
+                    try:
+                        from deal_hunter.cli import run_once
+                        alerts = run_once(cfg, enrich=False)
+                        log.info("Manual scan completed: %d alerts", alerts)
+                    except Exception as e:
+                        log.exception("Manual scan failed")
+                    finally:
+                        _scan_in_progress[0] = False
+                threading.Thread(target=_run_scan, daemon=True).start()
+                payload = {"status": "ok", "summary": "Scan started. Refresh page when done."}
                 body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
