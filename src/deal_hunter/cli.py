@@ -63,19 +63,9 @@ def _adapters(cfg: cfg_mod.Config):
                 allowed_cities=allowed_cities,
                 max_pages=cfg.schedule.max_pages,
                 request_delay_sec=cfg.schedule.delay_between_requests_sec,
-            )
-        )
-        )
-    if cfg.sources.ad:
-        paths = cfg.ad_city_paths or ["/nadlansale"]
-        out.append(
-            AdAdapter(
-                city_paths=paths,
-                search=cfg.search.model_dump(),
-                max_pages=cfg.schedule.max_pages,
-                request_delay_sec=cfg.schedule.delay_between_requests_sec,
                 enrich_details=True,
             )
+        )
         )
     # Madlan adapter still deferred (PerimeterX CAPTCHA).
     return out
