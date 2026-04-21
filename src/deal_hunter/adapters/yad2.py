@@ -102,10 +102,9 @@ class Yad2Adapter:
             ("maxRooms", str(s["rooms_max"])),
             ("minPrice", str(s["price_min"])),
             ("maxPrice", str(s["price_max"])),
-            ("city", city.get("yad2_id") or city["city_code"]),
         ]
         if s.get("min_sqm"):
-            params.append(("minSquareMeterBuild", str(s["min_sqm"])))
+            params.append(("squareMeterMin", str(s["min_sqm"])))
         if page > 1:
             params.append(("page", str(page)))
         qs = "&".join(f"{k}={v}" for k, v in params)
@@ -168,7 +167,10 @@ class Yad2Adapter:
 
         street = (addr.get("street", {}) or {}).get("text", "") or ""
         neighborhood = (addr.get("neighborhood", {}) or {}).get("text", "") or ""
-        city_name = (addr.get("city", {}) or {}).get("text", "") or city.get("name", "")
+        city_name = (addr.get("city", {}) or {}).get("text", "") or ""
+        expected_city = city.get("hebrew_name", city.get("name", ""))
+        if expected_city and city_name != expected_city:
+            return None, "city_mismatch"
         house_num = str(house.get("number", "") or "")
         address_str = ", ".join(filter(None, [f"{street} {house_num}".strip(), neighborhood, city_name]))
 
