@@ -144,6 +144,11 @@ class AdAdapter:
                 if reason:
                     filter_stats[reason] = filter_stats.get(reason, 0) + 1
                     continue
+                if self.enrich_details:
+                    try:
+                        listing = self.fetch_detail(listing)
+                    except Exception as e:
+                        log.debug("ad detail enrich failed for %s: %s", listing.source_id, e)
                 yielded += 1
                 yield listing
             log.info(

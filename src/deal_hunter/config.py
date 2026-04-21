@@ -27,6 +27,7 @@ class CityCfg(BaseModel):
     name: str
     city_code: str
     slug: str = "tel-aviv-area"
+    onmap_slug: str = ""
     filter_areas: bool = False
     area_keywords: list[str] = Field(default_factory=list)
 
