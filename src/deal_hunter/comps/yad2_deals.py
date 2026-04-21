@@ -12,6 +12,7 @@ HTML fetch with the enrichment pass in the Yad2 adapter.
 from __future__ import annotations
 
 import hashlib
+import html as _html_mod
 import logging
 import random
 import re
@@ -27,8 +28,9 @@ BASE = "https://www.yad2.co.il"
 
 
 def _clean(cell: str) -> str:
-    """Strip HTML tags and whitespace/bidi marks from a table cell."""
+    """Strip HTML tags, decode HTML entities, and remove whitespace/bidi marks."""
     text = re.sub(r"<[^>]+>", "", cell)
+    text = _html_mod.unescape(text)           # decode &#x20AA; → ₪, &nbsp; → space, etc.
     text = re.sub(r"[\u200f\u200e\xa0]", "", text)
     return text.strip()
 

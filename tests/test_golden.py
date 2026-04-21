@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from deal_hunter.adapters.yad2 import Yad2Adapter, _extract_items
+from deal_hunter.comps.yad2_deals import extract_comps_from_html
 from deal_hunter.models import Listing
 from deal_hunter.repo.listings_repo import ListingsRepo
 from deal_hunter.scoring.heuristic import score_listing
@@ -31,6 +32,25 @@ SEARCH = {
     "min_sqm": 55,
     "max_listing_age_days": 90,
 }
+
+# Minimal HTML with both ₪ character and &#x20AA; entity forms to guard price parsing
+_DEALS_HTML = """
+<section data-testid="deals-history">
+<table><tbody>
+<tr>
+  <td>הרצל 12</td><td>דירה</td><td>03/2024</td><td>3</td>
+  <td>80</td><td>2</td><td>1995</td><td>2,800,000 &#x20AA;</td>
+</tr>
+<tr>
+  <td>ביאליק 5</td><td>דירה</td><td>01/2024</td><td>3.5</td>
+  <td>90</td><td>3</td><td>2002</td><td>3,100,000 ₪</td>
+</tr>
+<tr>
+  <td></td><td>N/A</td><td>bad</td><td></td><td></td><td></td>
+</tr>
+</tbody></table>
+</section>
+"""
 
 
 # ── 1. Feed parsing ──────────────────────────────────────────────────────────
@@ -51,9 +71,34 @@ def test_yad2_feed_parse_returns_listings():
     assert first.source_id, "source_id must be non-empty"
     assert first.price > 0, "price must be positive"
     assert first.url.startswith("https://"), "url must be https"
-    # Canonical fields
     assert first.city, "city must be populated"
     assert first.price_per_sqm is None or first.price_per_sqm > 0
+
+
+# ── 1b. Comps HTML parser ────────────────────────────────────────────────────
+
+
+def test_extract_comps_from_html_parses_table():
+    comps = extract_comps_from_html(_DEALS_HTML, source_city="תל אביב יפו", source_neighborhood="מרכז")
+    assert len(comps) == 2, f"expected 2 valid comps, got {len(comps)}"
+
+    # First comp: HTML-entity price
+    assert comps[0].price == 2_800_000, f"entity price mismatch: {comps[0].price}"
+    assert comps[0].sqm == 80
+    assert comps[0].rooms == 3.0
+    assert comps[0].year_built == 1995
+    assert comps[0].deal_date == "03/2024"
+    assert comps[0].city == "תל אביב יפו"
+    assert comps[0].source == "yad2_deals"
+
+    # Second comp: direct ₪ character
+    assert comps[1].price == 3_100_000, f"direct price mismatch: {comps[1].price}"
+    assert comps[1].rooms == 3.5
+
+
+def test_extract_comps_empty_on_no_section():
+    assert extract_comps_from_html("") == []
+    assert extract_comps_from_html("<html><body>no deals here</body></html>") == []
 
 
 # ── 2. Scoring ───────────────────────────────────────────────────────────────
@@ -88,7 +133,6 @@ def test_score_fair_price_below_estimate():
     )
     score, reasons = score_listing(listing)
     assert reasons["market_band_source"] == "comps", "should use comps-based band"
-    # ppsqm=35,000 vs band lo=36,000 (40k*0.9) → below band → +2
     assert score > 5.0, f"expected score > 5, got {score}"
     assert "price_vs_market" in reasons
 
@@ -164,7 +208,5 @@ def test_repo_upsert_same_price_no_duplicate_history():
                 "SELECT COUNT(*) FROM price_history WHERE source=? AND source_id=?",
                 ("yad2", "test-001"),
             ).fetchone()
-            # INSERT OR IGNORE means same (source, source_id, ts) won't duplicate
-            # but two upserts at different wall-clock ts _may_ both insert
-            # The key invariant: at least one row exists
             assert rows[0] >= 1
+
