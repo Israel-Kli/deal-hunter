@@ -126,18 +126,42 @@ def cmd_run(args: argparse.Namespace) -> int:
         time.sleep(interval_sec)
 
 
-def cmd_comps_refresh(args: argparse.Namespace) -> int:
-    """Pre-populate the comps table from Yad2 deals for a sample of current listings."""
+def _comps_dicts_from_comps(comps: list) -> list[dict]:
+    """Convert list[Comp] → list[dict] ready for repo.upsert_comps."""
     import hashlib
+    out = []
+    for c in comps:
+        ah = hashlib.sha1(
+            "|".join([c.city, c.neighborhood, c.street, c.house_number]).lower().encode()
+        ).hexdigest()[:16]
+        out.append({
+            "address_hash": ah,
+            "deal_date": c.deal_date,
+            "price": c.price,
+            "sqm": c.sqm,
+            "rooms": c.rooms,
+            "city": c.city,
+            "neighborhood": c.neighborhood,
+            "street": c.street,
+            "house_number": c.house_number,
+            "year_built": c.year_built,
+            "raw": c.raw,
+        })
+    return out
+
+
+def cmd_comps_refresh(args: argparse.Namespace) -> int:
+    """Pre-populate the comps table from nadlan.gov.il and Yad2 deals."""
     import json as _json
 
     cfg = cfg_mod.load(args.config)
     db_path = Path(cfg.data_dir) / "deal-hunter.db"
     max_listings = args.max_listings
+    sources = args.sources  # e.g. ["nadlan", "yad2"] or ["nadlan"] or ["yad2"]
 
     with ListingsRepo(db_path) as repo:
         rows = repo.conn.execute(
-            "SELECT source, source_id, city, neighborhood, source_payload "
+            "SELECT source, source_id, city, neighborhood, street, source_payload "
             "FROM listings ORDER BY score DESC NULLS LAST LIMIT ?",
             (max_listings,),
         ).fetchall()
@@ -146,60 +170,81 @@ def cmd_comps_refresh(args: argparse.Namespace) -> int:
             log.info("comps refresh: no listings in DB yet — run 'deal-hunter run --once' first")
             return 0
 
-        from deal_hunter.comps.yad2_deals import Yad2DealsProvider
-
-        adapter = Yad2Adapter(
-            cities=[c.model_dump() for c in cfg.cities],
-            search=cfg.search.model_dump(),
-            max_pages=cfg.schedule.max_pages,
-            request_delay_sec=cfg.schedule.delay_between_requests_sec,
-        )
-        provider = Yad2DealsProvider()
-        bid = adapter._get_build_id()
-        if not bid:
-            log.error("comps refresh: cannot get Yad2 build id")
-            return 1
-
         total = 0
-        for row in rows:
-            source = row[0]
-            token = row[1]
-            city = row[2]
-            neighborhood = row[3]
-            payload = _json.loads(row[4] or "{}")
-            slug = payload.get("_slug", cfg.cities[0].slug if cfg.cities else "tel-aviv-area")
 
-            if source != "yad2":
-                continue
+        # ── nadlan.gov.il (primary) ──────────────────────────────────────
+        if "nadlan" in sources:
+            from deal_hunter.comps.nadlan_gov import NadlanGovProvider
+            nadlan = NadlanGovProvider()
+            seen_neighborhoods: set[tuple[str, str]] = set()
 
-            comps = provider.comps_for_listing(
-                token, bid, slug,
-                city=city, neighborhood=neighborhood,
+            for row in rows:
+                city = row[2]
+                neighborhood = row[3]
+                street = row[4] if len(row) > 4 else ""
+                payload = _json.loads(row[5] if len(row) > 5 else row[4] or "{}")
+
+                # De-duplicate: one nadlan call per (city, street) pair
+                key = (city.lower(), street.lower())
+                if key in seen_neighborhoods:
+                    continue
+                seen_neighborhoods.add(key)
+
+                comps = nadlan.comps_for(
+                    city=city,
+                    neighborhood=neighborhood,
+                    street=street,
+                    rooms=None,        # fetch all room buckets
+                    sqm=None,
+                    window_months=getattr(args, "window_months", 18),
+                )
+                if not comps:
+                    continue
+                dicts = _comps_dicts_from_comps(comps)
+                n = repo.upsert_comps("nadlan_gov", dicts)
+                total += n
+                log.info(
+                    "comps refresh [nadlan]: city=%s street=%s → %d comps", city, street, n
+                )
+
+        # ── Yad2 deals (secondary, per-listing HTML) ─────────────────────
+        if "yad2" in sources:
+            from deal_hunter.comps.yad2_deals import Yad2DealsProvider
+
+            adapter = Yad2Adapter(
+                cities=[c.model_dump() for c in cfg.cities],
+                search=cfg.search.model_dump(),
+                max_pages=cfg.schedule.max_pages,
+                request_delay_sec=cfg.schedule.delay_between_requests_sec,
             )
-            if not comps:
-                continue
+            provider = Yad2DealsProvider()
+            bid = adapter._get_build_id()
+            if not bid:
+                log.error("comps refresh [yad2]: cannot get Yad2 build id")
+            else:
+                for row in rows:
+                    source = row[0]
+                    token = row[1]
+                    city = row[2]
+                    neighborhood = row[3]
+                    payload = _json.loads(row[5] if len(row) > 5 else row[4] or "{}")
+                    slug = payload.get(
+                        "_slug", cfg.cities[0].slug if cfg.cities else "tel-aviv-area"
+                    )
 
-            dicts = []
-            for c in comps:
-                ah = hashlib.sha1(
-                    "|".join([c.city, c.neighborhood, c.street, c.house_number]).lower().encode()
-                ).hexdigest()[:16]
-                dicts.append({
-                    "address_hash": ah,
-                    "deal_date": c.deal_date,
-                    "price": c.price,
-                    "sqm": c.sqm,
-                    "rooms": c.rooms,
-                    "city": c.city,
-                    "neighborhood": c.neighborhood,
-                    "street": c.street,
-                    "house_number": c.house_number,
-                    "year_built": c.year_built,
-                    "raw": c.raw,
-                })
-            n = repo.upsert_comps("yad2_deals", dicts)
-            total += n
-            log.info("comps refresh: token=%s → %d comps persisted", token, n)
+                    if source != "yad2":
+                        continue
+
+                    comps = provider.comps_for_listing(
+                        token, bid, slug,
+                        city=city, neighborhood=neighborhood,
+                    )
+                    if not comps:
+                        continue
+                    dicts = _comps_dicts_from_comps(comps)
+                    n = repo.upsert_comps("yad2_deals", dicts)
+                    total += n
+                    log.info("comps refresh [yad2]: token=%s → %d comps", token, n)
 
         log.info("comps refresh done: %d total comps upserted", total)
     return 0
@@ -231,6 +276,15 @@ def main() -> int:
     refresh_p.add_argument(
         "--max-listings", type=int, default=50,
         help="How many top-scored listings to fetch comps for (default 50)",
+    )
+    refresh_p.add_argument(
+        "--sources", nargs="+", default=["nadlan", "yad2"],
+        choices=["nadlan", "yad2"],
+        help="Which comps sources to pull (default: nadlan yad2)",
+    )
+    refresh_p.add_argument(
+        "--window-months", type=int, default=18,
+        help="How many months back to include (default 18)",
     )
     refresh_p.set_defaults(func=cmd_comps_refresh)
 

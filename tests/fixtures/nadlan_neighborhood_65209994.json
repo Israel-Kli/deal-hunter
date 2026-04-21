@@ -1,0 +1,167 @@
+{
+  "neighborhoodId": 65209994,
+  "neighborhoodName": "לב העיר",
+  "settlementID": 5000,
+  "settlementName": "תל אביב -יפו",
+  "trends": {
+    "rooms": [
+      {
+        "graphData": [
+          {
+            "neighborhoodPrice": 4448900,
+            "settlementPrice": 3640400,
+            "countryPrice": 1554500,
+            "year": 2025,
+            "month": 3
+          },
+          {
+            "neighborhoodPrice": 4447400,
+            "settlementPrice": 3368600,
+            "countryPrice": 1580600,
+            "year": 2024,
+            "month": 12
+          },
+          {
+            "neighborhoodPrice": 4291300,
+            "settlementPrice": 3544300,
+            "countryPrice": 1579900,
+            "year": 2024,
+            "month": 9
+          },
+          {
+            "neighborhoodPrice": 4196700,
+            "settlementPrice": 3668000,
+            "countryPrice": 1548000,
+            "year": 2024,
+            "month": 3
+          }
+        ],
+        "numRooms": 3,
+        "hasDeals": 1,
+        "summary": {
+          "lastYearAvgPrice": 4447400,
+          "priceDifferencePercentage": 1.99
+        }
+      },
+      {
+        "graphData": [
+          {
+            "neighborhoodPrice": 6482600,
+            "settlementPrice": 4531100,
+            "countryPrice": 2086900,
+            "year": 2025,
+            "month": 3
+          },
+          {
+            "neighborhoodPrice": 5911200,
+            "settlementPrice": 4111900,
+            "countryPrice": 2069600,
+            "year": 2024,
+            "month": 9
+          },
+          {
+            "neighborhoodPrice": 6559600,
+            "settlementPrice": 4656800,
+            "countryPrice": 2103100,
+            "year": 2024,
+            "month": 3
+          },
+          {
+            "neighborhoodPrice": 6470700,
+            "settlementPrice": 4562000,
+            "countryPrice": 1838200,
+            "year": 2023,
+            "month": 3
+          }
+        ],
+        "numRooms": 4,
+        "hasDeals": 1,
+        "summary": {
+          "lastYearAvgPrice": 6196900,
+          "priceDifferencePercentage": "-5.53"
+        }
+      },
+      {
+        "graphData": [
+          {
+            "neighborhoodPrice": 9244300,
+            "settlementPrice": 6163000,
+            "countryPrice": 2931200,
+            "year": 2024,
+            "month": 3
+          },
+          {
+            "neighborhoodPrice": 7236900,
+            "settlementPrice": 6113700,
+            "countryPrice": 2705200,
+            "year": 2023,
+            "month": 3
+          },
+          {
+            "neighborhoodPrice": 9185600,
+            "settlementPrice": 5543800,
+            "countryPrice": 2425000,
+            "year": 2022,
+            "month": 3
+          },
+          {
+            "neighborhoodPrice": 7251300,
+            "settlementPrice": 4520600,
+            "countryPrice": 2188100,
+            "year": 2021,
+            "month": 3
+          }
+        ],
+        "numRooms": 5,
+        "hasDeals": 1,
+        "summary": {
+          "lastYearAvgPrice": null,
+          "priceDifferencePercentage": 0
+        }
+      },
+      {
+        "graphData": [
+          {
+            "neighborhoodPrice": 3601000,
+            "settlementPrice": 3426200,
+            "countryPrice": 1928200,
+            "year": 2025,
+            "month": 3
+          },
+          {
+            "neighborhoodPrice": 3922600,
+            "settlementPrice": 3453200,
+            "countryPrice": 1931900,
+            "year": 2024,
+            "month": 12
+          },
+          {
+            "neighborhoodPrice": 3684000,
+            "settlementPrice": 3377500,
+            "countryPrice": 1925700,
+            "year": 2024,
+            "month": 9
+          },
+          {
+            "neighborhoodPrice": 3618100,
+            "settlementPrice": 3580900,
+            "countryPrice": 2038000,
+            "year": 2024,
+            "month": 6
+          }
+        ],
+        "numRooms": "all",
+        "hasDeals": 1,
+        "summary": {
+          "lastYearAvgPrice": 3684000,
+          "priceDifferencePercentage": 4.83
+        }
+      }
+    ],
+    "indexes": {
+      "priceIncreases": 4.83,
+      "yield": 2.86,
+      "luxury": 10
+    }
+  }
+}
