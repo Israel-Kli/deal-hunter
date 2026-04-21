@@ -229,7 +229,7 @@ class Yad2Adapter:
             lat=coords.get("lat"),
             lon=coords.get("lon"),
             publish_date=publish_date.strftime("%Y-%m-%d") if publish_date else "",
-            source_payload={"_slug": city.get("slug", "")},
+            source_payload={"_slug": city.get("yad2_region") or city.get("slug", "")},
         ), None
 
     def _enrich(self, listing: Listing, build_id: str, slug: str) -> str | None:
