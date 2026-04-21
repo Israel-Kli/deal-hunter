@@ -45,7 +45,7 @@
   "schedule": {
     "poll_interval_minutes": 60,
     "delay_between_requests_sec": 3.0,
-    "max_pages": 5
+    "max_pages": 20
   },
   "notifications": {
     "telegram_enabled": false,
