@@ -8,6 +8,7 @@ import logging
 from pathlib import Path
 
 from deal_hunter.config import Config
+from deal_hunter.dedup.canonicalizer import load_existing_groups
 from deal_hunter.repo.listings_repo import ListingsRepo
 
 log = logging.getLogger(__name__)
@@ -26,6 +27,41 @@ def _make_handler(cfg: Config):
                 with ListingsRepo(db_path) as repo:
                     rows = repo.all_for_dashboard()
                 payload = {"count": len(rows), "listings": rows}
+                body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if self.path == "/api/dedup":
+                with ListingsRepo(db_path) as repo:
+                    groups = load_existing_groups(repo.conn)
+                payload = {
+                    "groups": [
+                        {
+                            "canonical_id": g.canonical_id,
+                            "city": g.city,
+                            "street": g.street_normalized,
+                            "house_number": g.house_number,
+                            "rooms_b": g.rooms_b,
+                            "sqm_b": g.sqm_b,
+                            "member_count": len(g.members),
+                            "price_spread": g.price_spread,
+                            "cheapest_price": g.cheapest.price if g.cheapest else None,
+                            "cheapest_source": g.cheapest.source if g.cheapest else None,
+                            "cheapest_url": g.cheapest.url if g.cheapest else None,
+                            "sources": list({m.source for m in g.members}),
+                        }
+                        for g in sorted(
+                            groups.values(),
+                            key=lambda g: g.price_spread,
+                            reverse=True,
+                        )
+                        if len(g.members) > 1
+                    ],
+                }
                 body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")

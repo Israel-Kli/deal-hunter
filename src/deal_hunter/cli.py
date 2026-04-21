@@ -14,6 +14,7 @@ from deal_hunter.adapters.base import SearchFilters
 from deal_hunter.adapters.ad import AdAdapter
 from deal_hunter.adapters.onmap import OnMapAdapter
 from deal_hunter.adapters.yad2 import Yad2Adapter
+from deal_hunter.dedup.canonicalizer import CanonicalGroup, dedup_batch, load_existing_groups
 from deal_hunter.models import Listing, ScanResult
 from deal_hunter.notify import telegram
 from deal_hunter.repo.listings_repo import ListingsRepo
@@ -66,9 +67,10 @@ def _adapters(cfg: cfg_mod.Config):
 
 
 def run_once(cfg: cfg_mod.Config, *, enrich: bool = False, max_items: int | None = None) -> int:
-    """Scrape, score, upsert, alert. Returns number of alerts sent/logged."""
+    """Scrape, score, upsert, dedup, alert. Returns number of alerts sent/logged."""
     db_path = Path(cfg.data_dir) / "deal-hunter.db"
     total_alerts = 0
+    fresh_listings: list[Listing] = []
     with ListingsRepo(db_path) as repo:
         for adapter in _adapters(cfg):
             started = time.time()
@@ -126,6 +128,44 @@ def run_once(cfg: cfg_mod.Config, *, enrich: bool = False, max_items: int | None
                 result.source, result.fetched, result.new, result.updated,
                 result.price_drops, result.alerted, result.duration_sec, len(result.errors),
             )
+
+        # ── Cross-source dedup pass ──────────────────────────────────────
+        try:
+            existing = load_existing_groups(repo.conn)
+            uncanonical = repo.list_uncanonical()
+            if uncanonical:
+                listings_to_dedup: list[Listing] = []
+                for row in uncanonical:
+                    l = Listing(
+                        source=row["source"],
+                        source_id=row["source_id"],
+                        url="",
+                        city=row["city"],
+                        neighborhood=row["neighborhood"],
+                        street=row["street"],
+                        house_number=row["house_number"],
+                        address=row["address"],
+                        rooms=row["rooms"],
+                        sqm=row["sqm"],
+                        price=row["price"],
+                    )
+                    listings_to_dedup.append(l)
+                groups = dedup_batch(listings_to_dedup, existing)
+                assignments = [
+                    (l.canonical_id, l.source, l.source_id)
+                    for l in listings_to_dedup
+                    if l.canonical_id
+                ]
+                if assignments:
+                    repo.update_canonical_ids(assignments)
+                    merged = sum(1 for g in groups.values() if len(g.members) > 1)
+                    log.info(
+                        "dedup: %d listings → %d canonical groups, %d multi-source",
+                        len(listings_to_dedup), len(groups), merged,
+                    )
+        except Exception:
+            log.exception("dedup pass failed")
+
     return total_alerts
 
 

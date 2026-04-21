@@ -208,3 +208,28 @@ class ListingsRepo:
             ),
         )
         self.conn.commit()
+
+    # ---- dedup ---------------------------------------------------------
+
+    def list_uncanonical(self) -> list[dict[str, Any]]:
+        """Return all listings that lack a canonical_id."""
+        rows = self.conn.execute(
+            "SELECT source, source_id, city, neighborhood, street, "
+            "house_number, address, rooms, sqm, price "
+            "FROM listings WHERE canonical_id IS NULL"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def update_canonical_ids(self, assignments: list[tuple[str, str, str]]) -> int:
+        """Batch-update canonical_id for (source, source_id, canonical_id) tuples.
+
+        Returns the number of rows updated.
+        """
+        if not assignments:
+            return 0
+        self.conn.executemany(
+            "UPDATE listings SET canonical_id=? WHERE source=? AND source_id=?",
+            [(cid, src, sid) for cid, src, sid in assignments],
+        )
+        self.conn.commit()
+        return self.conn.total_changes  # approximate; caller should track
