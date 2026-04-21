@@ -76,6 +76,7 @@ class Config(BaseModel):
     scoring: ScoringCfg = Field(default_factory=ScoringCfg)
     dashboard_port: int = 8081
     data_dir: str = "data"
+    onmap_cities: list[str] = Field(default_factory=list)
 
 
 def _env_override(cfg: dict[str, Any]) -> dict[str, Any]:
