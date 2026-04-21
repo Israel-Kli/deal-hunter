@@ -43,13 +43,28 @@ def _adapters(cfg: cfg_mod.Config):
         )
     if cfg.sources.onmap:
         slugs = cfg.onmap_cities or [c.onmap_slug for c in cfg.cities if c.onmap_slug]
+        allowed_cities = [c.hebrew_name for c in cfg.cities if c.hebrew_name]
         out.append(
             OnMapAdapter(
                 city_slugs=slugs,
                 search=cfg.search.model_dump(),
+                allowed_cities=allowed_cities,
                 max_pages=cfg.schedule.max_pages,
                 request_delay_sec=cfg.schedule.delay_between_requests_sec,
             )
+        )
+    if cfg.sources.ad:
+        paths = cfg.ad_city_paths or ["/nadlansale"]
+        allowed_cities = [c.hebrew_name for c in cfg.cities if c.hebrew_name]
+        out.append(
+            AdAdapter(
+                city_paths=paths,
+                search=cfg.search.model_dump(),
+                allowed_cities=allowed_cities,
+                max_pages=cfg.schedule.max_pages,
+                request_delay_sec=cfg.schedule.delay_between_requests_sec,
+            )
+        )
         )
     if cfg.sources.ad:
         paths = cfg.ad_city_paths or ["/nadlansale"]

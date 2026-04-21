@@ -59,11 +59,13 @@ class OnMapAdapter:
         *,
         max_pages: int = 10,
         request_delay_sec: float = 1.5,
+        allowed_cities: list[str] | None = None,
     ):
         self.city_slugs = city_slugs
         self.search = search
         self.max_pages = max_pages
         self.request_delay = request_delay_sec
+        self.allowed_cities = set(allowed_cities) if allowed_cities else None
 
     # ---- public ScraperAdapter surface ---------------------------------
 
@@ -161,6 +163,8 @@ class OnMapAdapter:
         addr = item.get("address") or {}
         he = addr.get("he") or {}
         city = he.get("city_name") or ""
+        if self.allowed_cities and city not in self.allowed_cities:
+            return None, "city_not_allowed"
         neighborhood = he.get("neighborhood") or ""
         street = he.get("street_name") or ""
         house_num = he.get("house_number") or ""

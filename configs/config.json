@@ -1,0 +1,58 @@
+{
+  "search": {
+    "rooms_min": 2.5,
+    "rooms_max": 5,
+    "price_min": 1800000,
+    "price_max": 10000000,
+    "min_sqm": 55,
+    "max_listing_age_days": 30,
+    "exclude_ground_floor": false
+  },
+  "cities": [
+    {
+      "name": "Tel Aviv",
+      "city_code": "5000",
+      "slug": "tel-aviv-area",
+      "onmap_slug": "tel-aviv-yafo",
+      "hebrew_name": "תל אביב-יפו",
+      "filter_areas": false,
+      "area_keywords": []
+    },
+    {
+      "name": "Ramat Gan",
+      "city_code": "8600",
+      "slug": "tel-aviv-area",
+      "onmap_slug": "ramat-gan",
+      "hebrew_name": "רמת גן",
+      "filter_areas": false,
+      "area_keywords": []
+    }
+  ],
+  "sources": {
+    "yad2":   true,
+    "madlan": false,
+    "onmap":  false,
+    "ad":     false
+  },
+  "comps": {
+    "yad2_deals": true,
+    "nadlan_gov": false
+  },
+  "schedule": {
+    "poll_interval_minutes": 60,
+    "delay_between_requests_sec": 3.0,
+    "max_pages": 5
+  },
+  "notifications": {
+    "telegram_enabled": false,
+    "telegram_bot_token": "",
+    "telegram_chat_id":   "",
+    "score_threshold": 7.0,
+    "price_drop_pct":  3.0
+  },
+  "scoring": {
+    "alert_threshold": 7.0
+  },
+  "dashboard_port": 8081,
+  "data_dir": "data"
+}
