@@ -113,6 +113,7 @@ class AdAdapter:
     def _iter_path(self, path: str) -> Iterable[Listing]:
         total_pages: int | None = None
         seen_ids: set[str] = set()
+        filter_stats: dict[str, int] = {}
         for page in range(1, self.max_pages + 1):
             url = self._build_feed_url(path, page)
             html = fetch(url, headers=AD_HEADERS, as_json=False)
@@ -133,11 +134,15 @@ class AdAdapter:
             for card in cards:
                 listing = self._parse_card(card)
                 if listing is None:
+                    filter_stats["parse_failed"] = filter_stats.get("parse_failed", 0) + 1
                     continue
                 if listing.source_id in seen_ids:
+                    filter_stats["duplicate"] = filter_stats.get("duplicate", 0) + 1
                     continue
                 seen_ids.add(listing.source_id)
-                if not self._passes_filters(listing):
+                reason = self._passes_filters(listing)
+                if reason:
+                    filter_stats[reason] = filter_stats.get(reason, 0) + 1
                     continue
                 yielded += 1
                 yield listing
@@ -148,6 +153,10 @@ class AdAdapter:
             if total_pages is not None and page >= total_pages:
                 break
             time.sleep(self.request_delay + random.uniform(0.2, 0.8))
+        if filter_stats:
+            total_filtered = sum(filter_stats.values())
+            summary = ", ".join(f"{k}: {v}" for k, v in sorted(filter_stats.items(), key=lambda x: -x[1]))
+            log.info("ad %s filter stats (%d filtered): %s", path, total_filtered, summary)
 
     def _build_feed_url(self, path: str, page: int) -> str:
         if page <= 1:
@@ -226,18 +235,18 @@ class AdAdapter:
             source_payload={"_path": "feed"},
         )
 
-    def _passes_filters(self, listing: Listing) -> bool:
+    def _passes_filters(self, listing: Listing) -> str | None:
         s = self.search
         if listing.price < s.get("price_min", 0) or listing.price > s.get("price_max", 10**12):
-            return False
+            return "price_out_of_range"
         if listing.rooms is not None:
             if not (s.get("rooms_min", 0) <= listing.rooms <= s.get("rooms_max", 99)):
-                return False
+                return "rooms_out_of_range"
         if s.get("min_sqm") and listing.sqm and listing.sqm < s["min_sqm"]:
-            return False
+            return "sqm_too_small"
         if s.get("exclude_ground_floor") and listing.floor == 0:
-            return False
-        return True
+            return "ground_floor"
+        return None
 
 
 # ── parsing helpers (module-level, pure) ────────────────────────────────────

@@ -113,6 +113,7 @@ class Yad2Adapter:
         return f"{BASE}/realestate/_next/data/{build_id}/forsale/{slug}.json?{qs}"
 
     def _iter_city(self, build_id: str, city: dict[str, Any]) -> Iterable[Listing]:
+        filter_stats: dict[str, int] = {}
         for page in range(1, self.max_pages + 1):
             url = self._build_feed_url(build_id, city, page)
             data = fetch(url)
@@ -123,23 +124,29 @@ class Yad2Adapter:
                 break
             log.info("Yad2 %s page %d: %d items", city["name"], page, len(items))
             for raw in items:
-                listing = self._parse(raw, city)
+                listing, reason = self._parse(raw, city)
+                if reason:
+                    filter_stats[reason] = filter_stats.get(reason, 0) + 1
                 if listing:
                     yield listing
             if not _has_next_page(data):
                 break
             time.sleep(self.request_delay + random.uniform(0.5, 1.5))
+        if filter_stats:
+            total_filtered = sum(filter_stats.values())
+            summary = ", ".join(f"{k}: {v}" for k, v in sorted(filter_stats.items(), key=lambda x: -x[1]))
+            log.info("Yad2 %s filter stats (%d filtered): %s", city["name"], total_filtered, summary)
 
-    def _parse(self, item: dict[str, Any], city: dict[str, Any]) -> Listing | None:
+    def _parse(self, item: dict[str, Any], city: dict[str, Any]) -> tuple[Listing | None, str | None]:
         s = self.search
         token = item.get("token")
         if not token:
-            return None
+            return None, "no_token"
 
         details = item.get("additionalDetails", {}) or {}
         rooms = details.get("roomsCount")
         if rooms is not None and not (s["rooms_min"] <= rooms <= s["rooms_max"]):
-            return None
+            return None, "rooms_out_of_range"
 
         # Property type filter (house-only: בית פרטי/קוטג', דו משפחתי)
         allowed_types = s.get("property_types")
@@ -147,17 +154,17 @@ class Yad2Adapter:
             prop = (details.get("property") or {})
             prop_text = prop.get("text", "")
             if prop_text not in allowed_types:
-                return None
+                return None, "property_type_filtered"
 
         addr = item.get("address", {}) or {}
         house = addr.get("house", {}) or {}
         floor = house.get("floor")
         if s.get("exclude_ground_floor") and floor == 0:
-            return None
+            return None, "ground_floor"
 
         price = item.get("price")
         if not price or price < s["price_min"] or price > s["price_max"]:
-            return None
+            return None, "price_out_of_range"
 
         street = (addr.get("street", {}) or {}).get("text", "") or ""
         neighborhood = (addr.get("neighborhood", {}) or {}).get("text", "") or ""
@@ -169,7 +176,7 @@ class Yad2Adapter:
         sqm_build = (item.get("metaData", {}) or {}).get("squareMeterBuild")
         size = sqm_build or sqm_advertised
         if s.get("min_sqm") and size and size < s["min_sqm"]:
-            return None
+            return None, "sqm_too_small"
 
         meta = item.get("metaData", {}) or {}
         images = list(meta.get("images", []) or [])
@@ -180,7 +187,7 @@ class Yad2Adapter:
         publish_date = _publish_date_from_images(images)
         max_age = s.get("max_listing_age_days", 30)
         if publish_date and publish_date < datetime.now() - timedelta(days=max_age):
-            return None
+            return None, "too_old"
 
         tags_raw = item.get("tags", []) or []
         tag_names = " ".join(t.get("name", "") for t in tags_raw if isinstance(t, dict))
@@ -221,7 +228,7 @@ class Yad2Adapter:
             lon=coords.get("lon"),
             publish_date=publish_date.strftime("%Y-%m-%d") if publish_date else "",
             source_payload={"_slug": city.get("slug", "")},
-        )
+        ), None
 
     def _enrich(self, listing: Listing, build_id: str, slug: str) -> str | None:
         """Enrich listing from JSON or HTML. Returns the HTML page (if fetched) for reuse."""
