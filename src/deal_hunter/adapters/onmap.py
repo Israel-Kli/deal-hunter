@@ -221,10 +221,6 @@ class OnMapAdapter:
             publish_date=publish_dt.strftime("%Y-%m-%d") if publish_dt else "",
             source_payload={"_city_slug": city_slug, "_slug": slug},
         ), None
-            lon=lon,
-            publish_date=publish_dt.strftime("%Y-%m-%d") if publish_dt else "",
-            source_payload={"_city_slug": city_slug, "_slug": slug},
-        )
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
