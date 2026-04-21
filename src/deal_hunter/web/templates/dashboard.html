@@ -48,6 +48,7 @@
       <option value="9">≥ 9</option>
     </select>
     <button onclick="load()">רענן</button>
+    <button id="resetBtn" onclick="resetDb()" style="background:#ef4444;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:14px;cursor:pointer;">🔄 איפוס DB</button>
   </div>
   <table>
     <thead>
@@ -57,7 +58,8 @@
         <th>מקור</th>
         <th>כתובת</th>
         <th class="sort" data-key="rooms">חדרים</th>
-        <th class="sort" data-key="sqm">מ"ר בנוי</th>
+        <th class="sort" data-key="sqm">מ"ר (פרסום)</th>
+        <th class="sort" data-key="sqm_build">מ"ר בנוי</th>
         <th class="sort" data-key="price">מחיר</th>
         <th class="sort" data-key="price_per_sqm">₪/מ"ר</th>
         <th class="sort" data-key="fair_price_estimate">הערכה</th>
@@ -81,8 +83,32 @@ async function load() {
   const r = await fetch('/api/listings');
   const d = await r.json();
   all = d.listings || [];
-  document.getElementById('meta').textContent = `${d.count} listings`;
+  let metaText = `${d.count} listings`;
+  if (d.last_updated) {
+    const dt = new Date(d.last_updated + 'Z');
+    metaText += ` | עודכן: ${dt.toLocaleString('he-IL')}`;
+  }
+  document.getElementById('meta').textContent = metaText;
   render();
+}
+async function resetDb() {
+  if (!confirm('לאפס את כל הנתונים ב-DB? פעולה זו תמחק את כל הרשומות.')) return;
+  const btn = document.getElementById('resetBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ מאפס...';
+  try {
+    const r = await fetch('/api/reset', {method: 'POST'});
+    const d = await r.json();
+    if (d.status === 'ok') {
+      alert('ה-DB אופס בהצלחה. הפעל סריקה מחדש.');
+      load();
+    }
+  } catch(e) {
+    alert('שגיאה באיפוס: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 איפוס DB';
+  }
 }
 function scoreClass(s) {
   if (s == null) return 's-cold';
@@ -175,12 +201,13 @@ function render() {
       <td>${l.address || '—'}</td>
       <td>${l.rooms ?? '—'}</td>
       <td>${l.sqm ?? '—'}</td>
+      <td>${l.sqm_build ?? '—'}</td>
       <td>₪${(l.price || 0).toLocaleString()}</td>
       <td>${l.price_per_sqm ? '₪' + l.price_per_sqm.toLocaleString() : '—'}</td>
       <td>${l.fair_price_estimate ? '₪' + l.fair_price_estimate.toLocaleString() : '—'}</td>
       <td><a href="${l.url}" target="_blank">↗</a></td>
     </tr>`).join('');
-  document.getElementById('rows').innerHTML = html || '<tr><td colspan="10" class="muted">אין תוצאות</td></tr>';
+  document.getElementById('rows').innerHTML = html || '<tr><td colspan="11" class="muted">אין תוצאות</td></tr>';
   document.querySelectorAll('th.sort').forEach(th => {
     th.classList.toggle('sort-asc', th.dataset.key === sortKey && sortAsc);
     th.classList.toggle('sort-desc', th.dataset.key === sortKey && !sortAsc);

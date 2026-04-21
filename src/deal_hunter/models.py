@@ -27,6 +27,7 @@ class Listing(BaseModel):
 
     rooms: float | None = None
     sqm: int | None = None
+    sqm_build: int | None = None
     floor: int | None = None
 
     price: int

@@ -26,7 +26,14 @@ def _make_handler(cfg: Config):
             if self.path == "/api/listings":
                 with ListingsRepo(db_path) as repo:
                     rows = repo.all_for_dashboard()
-                payload = {"count": len(rows), "listings": rows}
+                    last_updated = repo.conn.execute(
+                        "SELECT MAX(last_seen_at) FROM listings"
+                    ).fetchone()[0]
+                payload = {
+                    "count": len(rows),
+                    "listings": rows,
+                    "last_updated": last_updated,
+                }
                 body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -76,6 +83,22 @@ def _make_handler(cfg: Config):
             if self.path == "/":
                 self.path = "/dashboard.html"
             return super().do_GET()
+
+        def do_POST(self):
+            if self.path == "/api/reset":
+                with ListingsRepo(db_path) as repo:
+                    deleted = repo.reset_all()
+                payload = {"status": "ok", "deleted": deleted}
+                body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            self.send_response(404)
+            self.end_headers()
 
         def log_message(self, fmt, *args):
             log.info("http " + fmt, *args)

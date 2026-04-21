@@ -23,7 +23,14 @@ class ListingsRepo:
         self.conn = sqlite3.connect(str(self.path))
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA_SQL)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        cur = self.conn.execute("PRAGMA table_info(listings)")
+        columns = {row["name"] for row in cur.fetchall()}
+        if "sqm_build" not in columns:
+            self.conn.execute("ALTER TABLE listings ADD COLUMN sqm_build INTEGER")
 
     def close(self) -> None:
         self.conn.close()
@@ -67,7 +74,7 @@ class ListingsRepo:
             """INSERT INTO listings (
                 source, source_id, url,
                 city, neighborhood, street, house_number, address,
-                rooms, sqm, floor,
+                rooms, sqm, sqm_build, floor,
                 price, price_before, price_per_sqm,
                 listing_type, is_agent,
                 parking, elevator, balcony, ac, mamad, renovated,
@@ -76,7 +83,7 @@ class ListingsRepo:
                 canonical_id,
                 fair_price_estimate, fair_price_low, fair_price_high,
                 score, score_reasons, source_payload
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(source, source_id) DO UPDATE SET
                 url=excluded.url,
                 city=excluded.city,
@@ -86,6 +93,7 @@ class ListingsRepo:
                 address=excluded.address,
                 rooms=excluded.rooms,
                 sqm=excluded.sqm,
+                sqm_build=excluded.sqm_build,
                 floor=excluded.floor,
                 price=excluded.price,
                 price_before=excluded.price_before,
@@ -116,7 +124,7 @@ class ListingsRepo:
             (
                 listing.source, listing.source_id, listing.url,
                 listing.city, listing.neighborhood, listing.street, listing.house_number, listing.address,
-                listing.rooms, listing.sqm, listing.floor,
+                listing.rooms, listing.sqm, listing.sqm_build, listing.floor,
                 listing.price, listing.price_before, listing.price_per_sqm,
                 listing.listing_type, int(listing.is_agent),
                 int(listing.parking), int(listing.elevator), int(listing.balcony),
@@ -166,6 +174,20 @@ class ListingsRepo:
         )
         self.conn.commit()
         return cur.rowcount
+
+    def reset_all(self) -> dict[str, int]:
+        deleted_listings = self.conn.execute("DELETE FROM listings").rowcount
+        deleted_history = self.conn.execute("DELETE FROM price_history").rowcount
+        deleted_comps = self.conn.execute("DELETE FROM comps").rowcount
+        deleted_scan_log = self.conn.execute("DELETE FROM scan_log").rowcount
+        self.conn.execute("VACUUM")
+        self.conn.commit()
+        return {
+            "listings": deleted_listings,
+            "price_history": deleted_history,
+            "comps": deleted_comps,
+            "scan_log": deleted_scan_log,
+        }
 
     # ---- comps ---------------------------------------------------------
 

@@ -165,7 +165,9 @@ class Yad2Adapter:
         house_num = str(house.get("number", "") or "")
         address_str = ", ".join(filter(None, [f"{street} {house_num}".strip(), neighborhood, city_name]))
 
-        size = details.get("squareMeter") or (item.get("metaData", {}) or {}).get("squareMeterBuild")
+        sqm_advertised = details.get("squareMeter")
+        sqm_build = (item.get("metaData", {}) or {}).get("squareMeterBuild")
+        size = sqm_build or sqm_advertised
         if s.get("min_sqm") and size and size < s["min_sqm"]:
             return None
 
@@ -199,7 +201,8 @@ class Yad2Adapter:
             house_number=house_num,
             address=address_str,
             rooms=rooms,
-            sqm=size,
+            sqm=sqm_advertised,
+            sqm_build=sqm_build,
             floor=floor,
             price=price,
             price_before=item.get("priceBeforeTag"),

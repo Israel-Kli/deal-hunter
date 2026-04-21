@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS listings (
 
     rooms           REAL,
     sqm             INTEGER,
+    sqm_build       INTEGER,
     floor           INTEGER,
 
     price           INTEGER NOT NULL,
