@@ -28,6 +28,10 @@ MARKET_REFS: list[tuple[str, str, int, int]] = [
     ("חיפה",    "",           12_000, 20_000),
     # Ramat Gan default
     ("רמת גן", "",            28_000, 38_000),
+    # Ariel
+    ("אריאל",   "",           12_000, 18_000),
+    # Bet Shemesh
+    ("בית שמש", "",           15_000, 22_000),
 ]
 FALLBACK_BAND = (25_000, 40_000)
 
@@ -82,6 +86,8 @@ def score_listing(listing: Listing) -> tuple[float, dict[str, Any]]:
         mult = 0.003
         if "תל אביב" in city: mult = 0.0025
         elif "חיפה" in city: mult = 0.004
+        elif "אריאל" in city: mult = 0.0035
+        elif "בית שמש" in city: mult = 0.0035
         est_monthly = price * mult
         gross_yield_pct = (est_monthly * 12 / price) * 100
         reasons["est_yield_pct"] = round(gross_yield_pct, 2)
