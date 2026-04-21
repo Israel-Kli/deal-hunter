@@ -19,6 +19,7 @@ class SearchCfg(BaseModel):
     min_sqm: int = 55
     max_listing_age_days: int = 30
     exclude_ground_floor: bool = False
+    property_types: list[str] = Field(default_factory=list)
 
 
 class CityCfg(BaseModel):
