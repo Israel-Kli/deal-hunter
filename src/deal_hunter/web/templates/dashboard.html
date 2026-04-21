@@ -26,10 +26,15 @@
   th.sort::after { content:' ⇅'; opacity:.3; }
   th.sort.sort-asc::after { content:' ↑'; opacity:1; }
   th.sort.sort-desc::after { content:' ↓'; opacity:1; }
+  .scoring-info { background:#fff; border-radius:8px; padding:12px 16px; margin-bottom:16px; font-size:12px; color:#4b5563; box-shadow:0 1px 3px rgba(0,0,0,.08); line-height:1.6; }
+  .scoring-info b { color:#1a1a2e; }
+  .btn-scan { background:#3b82f6; color:#fff; border:none; border-radius:6px; padding:6px 14px; font-size:14px; cursor:pointer; }
+  .btn-reset { background:#ef4444; color:#fff; border:none; border-radius:6px; padding:6px 14px; font-size:14px; cursor:pointer; }
+  .street-view { width:80px; height:60px; border-radius:4px; object-fit:cover; }
 </style>
 </head>
 <body>
-  <h1>🏠 deal-hunter</h1>
+  <h1>deal-hunter</h1>
   <div class="meta muted" id="meta"></div>
   <div class="bar">
     <input id="q" placeholder="חיפוש טקסט..." />
@@ -48,22 +53,30 @@
       <option value="9">≥ 9</option>
     </select>
     <button onclick="load()">רענן</button>
-    <button id="resetBtn" onclick="resetDb()" style="background:#ef4444;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:14px;cursor:pointer;">🔄 איפוס DB</button>
+    <button id="scanBtn" class="btn-scan" onclick="triggerScan()">🔍 סריקה ידנית</button>
+    <button id="resetBtn" class="btn-reset" onclick="resetDb()">🔄 איפוס DB</button>
+  </div>
+  <div class="scoring-info">
+    <b>ציון (1-10):</b>
+    מחיר מול שוק (30%) — ₪/מ"ר מתחת לטווח → ציון גבוה |
+    תשואה משוערת (20%) — תשואה שכירות גבוהה → ציון גבוה |
+    מתקנים (20%) — חניה, מעלית, מרפסת, ממ"ד, שיפוץ → בונוס |
+    מו"מ (15%) — מוכר פרטי / ירידת מחיר → בונוס |
+    סיכון (15%) — ללא מעלית בקומה גבוהה, ללא ממ"ד, מחיר גבוה → הפחתה
   </div>
   <table>
     <thead>
       <tr>
         <th>ציון</th>
         <th>עיר</th>
-        <th>מקור</th>
+        <th class="sort" data-key="source">מקור</th>
         <th>כתובת</th>
         <th class="sort" data-key="rooms">חדרים</th>
         <th class="sort" data-key="sqm">מ"ר (פרסום)</th>
         <th class="sort" data-key="sqm_build">מ"ר בנוי</th>
         <th class="sort" data-key="price">מחיר</th>
         <th class="sort" data-key="price_per_sqm">₪/מ"ר</th>
-        <th class="sort" data-key="fair_price_estimate">הערכה</th>
-        <th>לינק</th>
+        <th>רחוב</th>
       </tr>
     </thead>
     <tbody id="rows"></tbody>
@@ -71,7 +84,7 @@
   <div id="scoreModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:100;justify-content:center;align-items:center;">
     <div style="background:#fff;border-radius:12px;padding:24px;max-width:480px;width:90%;max-height:80vh;overflow-y:auto;position:relative;">
       <button onclick="closeScore()" style="position:absolute;top:12px;left:12px;background:none;border:none;font-size:20px;cursor:pointer;">✕</button>
-      <h2 style="margin:0 0 16px;font-size:18px;">📊 פירוט ציון</h2>
+      <h2 style="margin:0 0 16px;font-size:18px;">פירוט ציון</h2>
       <div id="scoreDetails"></div>
     </div>
   </div>
@@ -83,10 +96,10 @@ async function load() {
   const r = await fetch('/api/listings');
   const d = await r.json();
   all = d.listings || [];
-  let metaText = `${d.count} listings`;
+  let metaText = d.count + ' listings';
   if (d.last_updated) {
     const dt = new Date(d.last_updated + 'Z');
-    metaText += ` | עודכן: ${dt.toLocaleString('he-IL')}`;
+    metaText += ' | עודכן: ' + dt.toLocaleString('he-IL');
   }
   document.getElementById('meta').textContent = metaText;
   render();
@@ -110,6 +123,26 @@ async function resetDb() {
     btn.textContent = '🔄 איפוס DB';
   }
 }
+async function triggerScan() {
+  const btn = document.getElementById('scanBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ סורק...';
+  try {
+    const r = await fetch('/api/scan', {method: 'POST'});
+    const d = await r.json();
+    if (d.status === 'ok') {
+      alert('סריקה הושלמה: ' + d.summary);
+      load();
+    } else {
+      alert('שגיאה בסריקה: ' + (d.error || 'לא ידוע'));
+    }
+  } catch(e) {
+    alert('שגיאה בסריקה: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔍 סריקה ידנית';
+  }
+}
 function scoreClass(s) {
   if (s == null) return 's-cold';
   if (s >= 8) return 's-hot';
@@ -118,9 +151,9 @@ function scoreClass(s) {
 }
 function scoreLabel(s) {
   if (s == null) return '—';
-  if (s >= 8) return '🔥 חזק';
-  if (s >= 6) return '⚡ בינוני';
-  return '❄️ חלש';
+  if (s >= 8) return 'חזק';
+  if (s >= 6) return 'בינוני';
+  return 'חלש';
 }
 function fmtScoreReasons(reasons) {
   if (!reasons || !Object.keys(reasons).length) return '<p class="muted">אין נתוני ציון</p>';
@@ -150,22 +183,22 @@ function fmtScoreReasons(reasons) {
   let html = '';
   for (const [key, val] of Object.entries(reasons)) {
     if (key === 'final') {
-      html += `<div style="margin-top:12px;padding:12px;background:#f0f4ff;border-radius:8px;font-weight:700;font-size:16px;">ציון סופי: ${val}/10</div>`;
+      html += '<div style="margin-top:12px;padding:12px;background:#f0f4ff;border-radius:8px;font-weight:700;font-size:16px;">ציון סופי: ' + val + '/10</div>';
       continue;
     }
     if (key === 'market_band') {
-      const [lo, hi] = val;
-      html += `<div><b>${map[key] || key}:</b> ₪${lo?.toLocaleString()} – ₪${hi?.toLocaleString()}/מ״ר</div>`;
+      const lo = val[0], hi = val[1];
+      html += '<div><b>' + (map[key] || key) + ':</b> ₪' + (lo||0).toLocaleString() + ' – ₪' + (hi||0).toLocaleString() + '/מ״ר</div>';
       continue;
     }
     const displayVal = typeof val === 'boolean' ? (val ? '✓' : '✗') :
-      (typeof val === 'number' ? (key === 'est_yield_pct' ? `${val}%` : key === 'price_drop_pct' ? `${val}%` : val) : labels[val] || val);
-    html += `<div><b>${map[key] || key}:</b> ${displayVal}</div>`;
+      (typeof val === 'number' ? (key === 'est_yield_pct' ? val + '%' : key === 'price_drop_pct' ? val + '%' : val) : labels[val] || val);
+    html += '<div><b>' + (map[key] || key) + ':</b> ' + displayVal + '</div>';
   }
   return html;
 }
 function showScore(listing) {
-  document.getElementById('scoreDetails').innerHTML = fmtScoreReasons(listing.score_reasons);
+  document.getElementById('scoreDetails').innerHTML = fmtScoreReasons(listing.score_reasons || {});
   document.getElementById('scoreModal').style.display = 'flex';
 }
 function closeScore() {
@@ -177,6 +210,9 @@ document.getElementById('scoreModal').addEventListener('click', function(e) {
 function doSort(key) {
   if (sortKey === key) { sortAsc = !sortAsc; } else { sortKey = key; sortAsc = false; }
   render();
+}
+function streetViewUrl(address) {
+  return 'https://maps.googleapis.com/maps/api/streetview?size=160x120&location=' + encodeURIComponent(address) + '&fov=80&heading=0&pitch=0&key=';
 }
 function render() {
   const q = document.getElementById('q').value.trim();
@@ -193,21 +229,22 @@ function render() {
     const bv = b[sortKey] ?? 0;
     return sortAsc ? av - bv : bv - av;
   });
-  const html = rows.map(l => `
-    <tr>
-      <td><span class="score ${scoreClass(l.score)}" style="cursor:pointer" onclick="showScore(${JSON.stringify(JSON.stringify(l.score_reasons || {}))})">${l.score ?? '—'}<br><small>${scoreLabel(l.score)}</small></span></td>
-      <td>${l.city || '—'}</td>
-      <td><span class="src">${l.source}</span></td>
-      <td>${l.address || '—'}</td>
-      <td>${l.rooms ?? '—'}</td>
-      <td>${l.sqm ?? '—'}</td>
-      <td>${l.sqm_build ?? '—'}</td>
-      <td>₪${(l.price || 0).toLocaleString()}</td>
-      <td>${l.price_per_sqm ? '₪' + l.price_per_sqm.toLocaleString() : '—'}</td>
-      <td>${l.fair_price_estimate ? '₪' + l.fair_price_estimate.toLocaleString() : '—'}</td>
-      <td><a href="${l.url}" target="_blank">↗</a></td>
-    </tr>`).join('');
-  document.getElementById('rows').innerHTML = html || '<tr><td colspan="11" class="muted">אין תוצאות</td></tr>';
+  const html = rows.map(l => {
+    const svUrl = streetViewUrl(l.address || (l.street + ', ' + l.city));
+    return '<tr>' +
+      '<td><span class="score ' + scoreClass(l.score) + '" style="cursor:pointer" onclick="showScore(' + JSON.stringify(JSON.stringify(l.score_reasons || {})) + ')">' + (l.score ?? '—') + '<br><small>' + scoreLabel(l.score) + '</small></span></td>' +
+      '<td>' + (l.city || '—') + '</td>' +
+      '<td><a href="' + l.url + '" target="_blank"><span class="src">' + l.source + '</span></a></td>' +
+      '<td>' + (l.address || '—') + '</td>' +
+      '<td>' + (l.rooms ?? '—') + '</td>' +
+      '<td>' + (l.sqm ?? '—') + '</td>' +
+      '<td>' + (l.sqm_build ?? '—') + '</td>' +
+      '<td>₪' + (l.price || 0).toLocaleString() + '</td>' +
+      '<td>' + (l.price_per_sqm ? '₪' + l.price_per_sqm.toLocaleString() : '—') + '</td>' +
+      '<td><a href="https://www.google.com/maps?q=' + encodeURIComponent(l.address || '') + '" target="_blank"><img class="street-view" src="' + svUrl + '" onerror="this.style.display=\'none\'" /></a></td>' +
+      '</tr>';
+  }).join('');
+  document.getElementById('rows').innerHTML = html || '<tr><td colspan="10" class="muted">אין תוצאות</td></tr>';
   document.querySelectorAll('th.sort').forEach(th => {
     th.classList.toggle('sort-asc', th.dataset.key === sortKey && sortAsc);
     th.classList.toggle('sort-desc', th.dataset.key === sortKey && !sortAsc);
