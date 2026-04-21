@@ -27,6 +27,7 @@ class CityCfg(BaseModel):
     name: str
     city_code: str
     slug: str = "tel-aviv-area"
+    yad2_id: str = ""
     onmap_slug: str = ""
     hebrew_name: str = ""
     filter_areas: bool = False
