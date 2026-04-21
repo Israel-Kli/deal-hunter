@@ -102,14 +102,14 @@ class Yad2Adapter:
             ("maxRooms", str(s["rooms_max"])),
             ("minPrice", str(s["price_min"])),
             ("maxPrice", str(s["price_max"])),
-            ("multiCity", city["city_code"]),
+            ("city", city.get("yad2_id") or city["city_code"]),
         ]
         if s.get("min_sqm"):
-            params.append(("squareMeterMin", str(s["min_sqm"])))
+            params.append(("minSquareMeterBuild", str(s["min_sqm"])))
         if page > 1:
             params.append(("page", str(page)))
         qs = "&".join(f"{k}={v}" for k, v in params)
-        slug = city.get("yad2_id") or city.get("slug", "israel")
+        slug = city.get("yad2_region") or city.get("slug", "israel")
         return f"{BASE}/realestate/_next/data/{build_id}/forsale/{slug}.json?{qs}"
 
     def _iter_city(self, build_id: str, city: dict[str, Any]) -> Iterable[Listing]:
