@@ -30,12 +30,15 @@
   .scoring-info b { color:#1a1a2e; }
   .btn-scan { background:#3b82f6; color:#fff; border:none; border-radius:6px; padding:6px 14px; font-size:14px; cursor:pointer; }
   .btn-reset { background:#ef4444; color:#fff; border:none; border-radius:6px; padding:6px 14px; font-size:14px; cursor:pointer; }
-  .street-view { width:80px; height:60px; border-radius:4px; object-fit:cover; }
   .agent-badge { display:inline-block; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:600; }
   .agent-badge.makler { background:#f59e0b; color:#fff; }
   .agent-badge.private { background:#22c55e; color:#fff; }
   .desc-cell { max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:help; font-size:12px; color:#6b7280; }
   .desc-cell:hover { white-space:normal; word-break:break-word; }
+  .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:6px; border:1px solid #d1d5db; background:#fff; color:#2563eb; font-size:16px; cursor:pointer; text-decoration:none; transition:background .15s; }
+  .icon-btn:hover { background:#e0e7ff; text-decoration:none; }
+  .icon-btn.maps { color:#1a73e8; }
+  .icon-btn.maps:hover { background:#d2e3fc; }
 </style>
 </head>
 <body>
@@ -88,7 +91,7 @@
         <th class="sort" data-key="sqm_build">מ"ר בנוי</th>
         <th class="sort" data-key="price">מחיר</th>
         <th class="sort" data-key="price_per_sqm">₪/מ"ר</th>
-        <th>רחוב</th>
+        <th>מפה</th>
       </tr>
     </thead>
     <tbody id="rows"></tbody>
@@ -223,51 +226,48 @@ function doSort(key) {
   if (sortKey === key) { sortAsc = !sortAsc; } else { sortKey = key; sortAsc = false; }
   render();
 }
-function streetViewUrl(address) {
-  return 'https://maps.googleapis.com/maps/api/streetview?size=160x120&location=' + encodeURIComponent(address) + '&fov=80&heading=0&pitch=0&key=';
-}
-function render() {
-  const q = document.getElementById('q').value.trim();
-  const src = document.getElementById('src').value;
-  const min = parseFloat(document.getElementById('minScore').value);
-  const agentFilter = document.getElementById('agentType').value;
-  let rows = all.filter(l => {
-    if (src && l.source !== src) return false;
-    if ((l.score ?? 0) < min) return false;
-    if (agentFilter === 'private' && l.is_agent) return false;
-    if (agentFilter === 'agent' && !l.is_agent) return false;
-    if (q && !(l.address || '').includes(q) && !(l.neighborhood || '').includes(q) && !(l.city || '').includes(q)) return false;
-    return true;
-  });
-  rows.sort((a, b) => {
-    const av = a[sortKey] ?? 0;
-    const bv = b[sortKey] ?? 0;
-    return sortAsc ? av - bv : bv - av;
-  });
-  const html = rows.map(l => {
-    const svUrl = streetViewUrl((l.street || '') + ', ' + (l.city || ''));
-    const badge = l.is_agent
-      ? '<span class="agent-badge makler" title="מקלר/סוכן">מקלר</span>'
-      : '<span class="agent-badge private" title="מוכר פרטי">פרטי</span>';
-    const desc = l.description || '';
-    const truncated = desc.length > 80 ? desc.substring(0, 80) + '...' : desc;
-    const descHtml = desc ? '<div class="desc-cell" title="' + escapeHtml(desc) + '">' + escapeHtml(truncated) + '</div>' : '';
-    return '<tr>' +
-      '<td><span class="score ' + scoreClass(l.score) + '" style="cursor:pointer" onclick="showScore(' + JSON.stringify(JSON.stringify(l.score_reasons || {})) + ')">' + (l.score ?? '—') + '<br><small>' + scoreLabel(l.score) + '</small></span></td>' +
-      '<td>' + (l.city || '—') + '</td>' +
-      '<td><a href="' + l.url + '" target="_blank"><span class="src">' + l.source + '</span></a></td>' +
-      '<td>' + badge + '</td>' +
-      '<td>' + (l.address || '—') + '</td>' +
-      '<td>' + descHtml + '</td>' +
-      '<td>' + (l.rooms ?? '—') + '</td>' +
-      '<td>' + (l.sqm ?? '—') + '</td>' +
-      '<td>' + (l.sqm_build ?? '—') + '</td>' +
-      '<td>₪' + (l.price || 0).toLocaleString() + '</td>' +
-      '<td>' + (l.price_per_sqm ? '₪' + l.price_per_sqm.toLocaleString() : '—') + '</td>' +
-      '<td><a href="https://www.google.com/maps?q=' + encodeURIComponent((l.street || '') + ', ' + (l.city || '')) + '" target="_blank"><img class="street-view" src="' + svUrl + '" onerror="this.style.display=\'none\'" /></a></td>' +
-      '</tr>';
-  }).join('');
-  document.getElementById('rows').innerHTML = html || '<tr><td colspan="12" class="muted">אין תוצאות</td></tr>';
+  function render() {
+    const q = document.getElementById('q').value.trim();
+    const src = document.getElementById('src').value;
+    const min = parseFloat(document.getElementById('minScore').value);
+    const agentFilter = document.getElementById('agentType').value;
+    let rows = all.filter(l => {
+      if (src && l.source !== src) return false;
+      if ((l.score ?? 0) < min) return false;
+      if (agentFilter === 'private' && l.is_agent) return false;
+      if (agentFilter === 'agent' && !l.is_agent) return false;
+      if (q && !(l.address || '').includes(q) && !(l.neighborhood || '').includes(q) && !(l.city || '').includes(q)) return false;
+      return true;
+    });
+    rows.sort((a, b) => {
+      const av = a[sortKey] ?? 0;
+      const bv = b[sortKey] ?? 0;
+      return sortAsc ? av - bv : bv - av;
+    });
+    const html = rows.map(l => {
+      const mapsUrl = 'https://www.google.com/maps?q=' + encodeURIComponent((l.street || '') + ', ' + (l.city || ''));
+      const badge = l.is_agent
+        ? '<span class="agent-badge makler" title="מקלר/סוכן">מקלר</span>'
+        : '<span class="agent-badge private" title="מוכר פרטי">פרטי</span>';
+      const desc = l.description || '';
+      const truncated = desc.length > 80 ? desc.substring(0, 80) + '...' : desc;
+      const descHtml = desc ? '<div class="desc-cell" title="' + escapeHtml(desc) + '">' + escapeHtml(truncated) + '</div>' : '';
+      return '<tr>' +
+        '<td><span class="score ' + scoreClass(l.score) + '" style="cursor:pointer" onclick="showScore(' + escapeHtml(JSON.stringify(l.score_reasons || {})) + ')">' + (l.score ?? '—') + '<br><small>' + scoreLabel(l.score) + '</small></span></td>' +
+        '<td>' + (l.city || '—') + '</td>' +
+        '<td><a href="' + l.url + '" target="_blank"><span class="src">' + l.source + '</span></a></td>' +
+        '<td>' + badge + '</td>' +
+        '<td>' + (l.address || '—') + '</td>' +
+        '<td>' + descHtml + '</td>' +
+        '<td>' + (l.rooms ?? '—') + '</td>' +
+        '<td>' + (l.sqm ?? '—') + '</td>' +
+        '<td>' + (l.sqm_build ?? '—') + '</td>' +
+        '<td>₪' + (l.price || 0).toLocaleString() + '</td>' +
+        '<td>' + (l.price_per_sqm ? '₪' + l.price_per_sqm.toLocaleString() : '—') + '</td>' +
+        '<td><a href="' + mapsUrl + '" target="_blank">📍 מפה</a></td>' +
+        '</tr>';
+    }).join('');
+    document.getElementById('rows').innerHTML = html || '<tr><td colspan="12" class="muted">אין תוצאות</td></tr>';
   document.querySelectorAll('th.sort').forEach(th => {
     th.classList.toggle('sort-asc', th.dataset.key === sortKey && sortAsc);
     th.classList.toggle('sort-desc', th.dataset.key === sortKey && !sortAsc);
