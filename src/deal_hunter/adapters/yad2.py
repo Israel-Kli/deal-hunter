@@ -268,7 +268,12 @@ def _extract_items(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _has_next_page(data: dict[str, Any]) -> bool:
     for q in data.get("pageProps", {}).get("dehydratedState", {}).get("queries", []) or []:
-        p = q.get("state", {}).get("data", {}).get("pagination", {}) or {}
+        sd = q.get("state", {}).get("data", {})
+        if isinstance(sd, list):
+            continue
+        if not isinstance(sd, dict):
+            continue
+        p = sd.get("pagination", {}) or {}
         if p and p.get("currentPage", 1) < p.get("totalPages", 1):
             return True
     return False
