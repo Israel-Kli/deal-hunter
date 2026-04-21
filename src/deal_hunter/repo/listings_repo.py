@@ -1,0 +1,210 @@
+"""SQLite repository for listings, price_history, comps, scan_log.
+
+Kept intentionally small — a dict-shaped surface over sqlite3. No ORM.
+"""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Iterable
+
+from deal_hunter.models import Listing, ScanResult
+
+SCHEMA_SQL = (Path(__file__).parent / "schema.sql").read_text(encoding="utf-8")
+
+
+class ListingsRepo:
+    def __init__(self, db_path: str | Path):
+        self.path = Path(db_path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.conn = sqlite3.connect(str(self.path))
+        self.conn.row_factory = sqlite3.Row
+        self.conn.executescript(SCHEMA_SQL)
+        self.conn.commit()
+
+    def close(self) -> None:
+        self.conn.close()
+
+    def __enter__(self) -> "ListingsRepo":
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        self.close()
+
+    # ---- listings ------------------------------------------------------
+
+    def get(self, source: str, source_id: str) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            "SELECT * FROM listings WHERE source=? AND source_id=?",
+            (source, source_id),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def upsert(self, listing: Listing) -> tuple[bool, int | None]:
+        """Insert or update. Returns (is_new, previous_price_if_changed)."""
+        now = datetime.utcnow().isoformat()
+        existing = self.get(listing.source, listing.source_id)
+        prev_price: int | None = None
+        is_new = existing is None
+
+        if is_new:
+            listing.first_seen_at = listing.first_seen_at or datetime.utcnow()
+            listing.last_seen_at = datetime.utcnow()
+        else:
+            listing.first_seen_at = (
+                datetime.fromisoformat(existing["first_seen_at"])
+                if existing.get("first_seen_at")
+                else datetime.utcnow()
+            )
+            listing.last_seen_at = datetime.utcnow()
+            if existing.get("price") and existing["price"] != listing.price:
+                prev_price = existing["price"]
+
+        self.conn.execute(
+            """INSERT INTO listings (
+                source, source_id, url,
+                city, neighborhood, street, house_number, address,
+                rooms, sqm, floor,
+                price, price_before, price_per_sqm,
+                listing_type, is_agent,
+                parking, elevator, balcony, ac, mamad, renovated,
+                description, images_json, tags_json, lat, lon,
+                publish_date, first_seen_at, last_seen_at,
+                canonical_id,
+                fair_price_estimate, fair_price_low, fair_price_high,
+                score, score_reasons, source_payload
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(source, source_id) DO UPDATE SET
+                url=excluded.url,
+                city=excluded.city,
+                neighborhood=excluded.neighborhood,
+                street=excluded.street,
+                house_number=excluded.house_number,
+                address=excluded.address,
+                rooms=excluded.rooms,
+                sqm=excluded.sqm,
+                floor=excluded.floor,
+                price=excluded.price,
+                price_before=excluded.price_before,
+                price_per_sqm=excluded.price_per_sqm,
+                listing_type=excluded.listing_type,
+                is_agent=excluded.is_agent,
+                parking=excluded.parking,
+                elevator=excluded.elevator,
+                balcony=excluded.balcony,
+                ac=excluded.ac,
+                mamad=excluded.mamad,
+                renovated=excluded.renovated,
+                description=excluded.description,
+                images_json=excluded.images_json,
+                tags_json=excluded.tags_json,
+                lat=excluded.lat,
+                lon=excluded.lon,
+                publish_date=excluded.publish_date,
+                last_seen_at=excluded.last_seen_at,
+                canonical_id=excluded.canonical_id,
+                fair_price_estimate=excluded.fair_price_estimate,
+                fair_price_low=excluded.fair_price_low,
+                fair_price_high=excluded.fair_price_high,
+                score=excluded.score,
+                score_reasons=excluded.score_reasons,
+                source_payload=excluded.source_payload
+            """,
+            (
+                listing.source, listing.source_id, listing.url,
+                listing.city, listing.neighborhood, listing.street, listing.house_number, listing.address,
+                listing.rooms, listing.sqm, listing.floor,
+                listing.price, listing.price_before, listing.price_per_sqm,
+                listing.listing_type, int(listing.is_agent),
+                int(listing.parking), int(listing.elevator), int(listing.balcony),
+                int(listing.ac), int(listing.mamad), int(listing.renovated),
+                listing.description,
+                json.dumps(listing.images, ensure_ascii=False),
+                json.dumps(listing.tags, ensure_ascii=False),
+                listing.lat, listing.lon,
+                listing.publish_date,
+                listing.first_seen_at.isoformat(), listing.last_seen_at.isoformat(),
+                listing.canonical_id,
+                listing.fair_price_estimate, listing.fair_price_low, listing.fair_price_high,
+                listing.score,
+                json.dumps(listing.score_reasons, ensure_ascii=False),
+                json.dumps(listing.source_payload, ensure_ascii=False),
+            ),
+        )
+        self.conn.execute(
+            "INSERT OR IGNORE INTO price_history (source, source_id, ts, price) VALUES (?,?,?,?)",
+            (listing.source, listing.source_id, now, listing.price),
+        )
+        self.conn.commit()
+        return is_new, prev_price
+
+    def all_for_dashboard(self) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT * FROM listings ORDER BY score DESC NULLS LAST, first_seen_at DESC"
+        ).fetchall()
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            d = dict(r)
+            d["images"] = json.loads(d.get("images_json") or "[]")
+            d["tags"] = json.loads(d.get("tags_json") or "[]")
+            d["score_reasons"] = json.loads(d.get("score_reasons") or "{}")
+            for bf in ("parking", "elevator", "balcony", "ac", "mamad", "renovated", "is_agent"):
+                d[bf] = bool(d.get(bf))
+            d.pop("images_json", None)
+            d.pop("tags_json", None)
+            d.pop("source_payload", None)
+            out.append(d)
+        return out
+
+    def purge_older_than(self, cutoff_iso: str) -> int:
+        cur = self.conn.execute(
+            "DELETE FROM listings WHERE first_seen_at < ? AND (publish_date = '' OR publish_date < ?)",
+            (cutoff_iso, cutoff_iso[:10]),
+        )
+        self.conn.commit()
+        return cur.rowcount
+
+    # ---- comps ---------------------------------------------------------
+
+    def upsert_comps(self, provider: str, comps: Iterable[dict[str, Any]]) -> int:
+        now = datetime.utcnow().isoformat()
+        n = 0
+        for c in comps:
+            try:
+                self.conn.execute(
+                    """INSERT OR REPLACE INTO comps
+                    (provider, address_hash, deal_date, price, sqm, rooms,
+                     city, neighborhood, street, house_number, year_built, raw, fetched_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        provider, c["address_hash"], c["deal_date"], c["price"],
+                        c.get("sqm"), c.get("rooms"),
+                        c.get("city", ""), c.get("neighborhood", ""),
+                        c.get("street", ""), c.get("house_number", ""),
+                        c.get("year_built"), json.dumps(c.get("raw", {}), ensure_ascii=False),
+                        now,
+                    ),
+                )
+                n += 1
+            except Exception:
+                continue
+        self.conn.commit()
+        return n
+
+    # ---- scan log ------------------------------------------------------
+
+    def log_scan(self, result: ScanResult) -> None:
+        self.conn.execute(
+            """INSERT INTO scan_log (ts, source, fetched, new, updated, price_drops, alerted, duration_sec, errors)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (
+                datetime.utcnow().isoformat(),
+                result.source, result.fetched, result.new, result.updated,
+                result.price_drops, result.alerted, result.duration_sec,
+                json.dumps(result.errors, ensure_ascii=False),
+            ),
+        )
+        self.conn.commit()

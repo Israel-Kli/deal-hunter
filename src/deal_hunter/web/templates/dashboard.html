@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>deal-hunter</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:#0f1115; color:#e5e7eb; margin:0; padding:20px; }
+  h1 { margin:0 0 16px; font-size:20px; }
+  .bar { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+  input, select { background:#171a20; color:#e5e7eb; border:1px solid #2a2f39; border-radius:6px; padding:6px 10px; font-size:14px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { padding:8px 10px; border-bottom:1px solid #222831; text-align:right; }
+  th { background:#161a22; position:sticky; top:0; }
+  tr:hover { background:#13171f; }
+  .score { display:inline-block; min-width:38px; padding:3px 8px; border-radius:6px; text-align:center; font-weight:600; }
+  .s-hot   { background:#15803d; color:#fff; }
+  .s-warm  { background:#b45309; color:#fff; }
+  .s-cold  { background:#374151; color:#d1d5db; }
+  .src     { display:inline-block; padding:2px 8px; border-radius:4px; background:#1e293b; font-size:11px; letter-spacing:.5px; text-transform:uppercase; }
+  a        { color:#60a5fa; text-decoration:none; }
+  a:hover  { text-decoration:underline; }
+  .muted   { color:#94a3b8; font-size:12px; }
+  .meta    { margin-bottom:10px; }
+</style>
+</head>
+<body>
+  <h1>🏠 deal-hunter</h1>
+  <div class="meta muted" id="meta"></div>
+  <div class="bar">
+    <input id="q" placeholder="חיפוש טקסט..." />
+    <select id="src">
+      <option value="">כל המקורות</option>
+      <option value="yad2">Yad2</option>
+      <option value="madlan">Madlan</option>
+      <option value="onmap">OnMap</option>
+      <option value="ad">ad.co.il</option>
+    </select>
+    <select id="minScore">
+      <option value="0">ציון מכל</option>
+      <option value="6">≥ 6</option>
+      <option value="7" selected>≥ 7</option>
+      <option value="8">≥ 8</option>
+      <option value="9">≥ 9</option>
+    </select>
+    <button onclick="load()">רענן</button>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>ציון</th>
+        <th>מקור</th>
+        <th>כתובת</th>
+        <th>חדרים</th>
+        <th>מ"ר</th>
+        <th>מחיר</th>
+        <th>₪/מ"ר</th>
+        <th>הערכה</th>
+        <th>לינק</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+<script>
+let all = [];
+async function load() {
+  const r = await fetch('/api/listings');
+  const d = await r.json();
+  all = d.listings || [];
+  document.getElementById('meta').textContent = `${d.count} listings`;
+  render();
+}
+function scoreClass(s) {
+  if (s == null) return 's-cold';
+  if (s >= 8) return 's-hot';
+  if (s >= 6) return 's-warm';
+  return 's-cold';
+}
+function render() {
+  const q = document.getElementById('q').value.trim();
+  const src = document.getElementById('src').value;
+  const min = parseFloat(document.getElementById('minScore').value);
+  const rows = all.filter(l => {
+    if (src && l.source !== src) return false;
+    if ((l.score ?? 0) < min) return false;
+    if (q && !(l.address || '').includes(q) && !(l.neighborhood || '').includes(q)) return false;
+    return true;
+  }).map(l => `
+    <tr>
+      <td><span class="score ${scoreClass(l.score)}">${l.score ?? '—'}</span></td>
+      <td><span class="src">${l.source}</span></td>
+      <td>${l.address || '—'}</td>
+      <td>${l.rooms ?? '—'}</td>
+      <td>${l.sqm ?? '—'}</td>
+      <td>₪${(l.price || 0).toLocaleString()}</td>
+      <td>${l.price_per_sqm ? '₪' + l.price_per_sqm.toLocaleString() : '—'}</td>
+      <td>${l.fair_price_estimate ? '₪' + l.fair_price_estimate.toLocaleString() : '—'}</td>
+      <td><a href="${l.url}" target="_blank">↗</a></td>
+    </tr>`).join('');
+  document.getElementById('rows').innerHTML = rows || '<tr><td colspan="9" class="muted">אין תוצאות</td></tr>';
+}
+document.getElementById('q').addEventListener('input', render);
+document.getElementById('src').addEventListener('change', render);
+document.getElementById('minScore').addEventListener('change', render);
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>
