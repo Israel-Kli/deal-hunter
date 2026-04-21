@@ -255,7 +255,7 @@ function doSort(key) {
       return '<tr>' +
         '<td><span class="score ' + scoreClass(l.score) + '" style="cursor:pointer" onclick="showScore(' + escapeHtml(JSON.stringify(l.score_reasons || {})) + ')">' + (l.score ?? '—') + '<br><small>' + scoreLabel(l.score) + '</small></span></td>' +
         '<td>' + (l.city || '—') + '</td>' +
-        '<td><a href="' + l.url + '" target="_blank"><span class="src">' + l.source + '</span></a></td>' +
+        '<td><a class="icon-btn" href="' + l.url + '" target="_blank" title="פתח מודעה במקור">🔗</a></td>' +
         '<td>' + badge + '</td>' +
         '<td>' + (l.address || '—') + '</td>' +
         '<td>' + descHtml + '</td>' +
@@ -264,7 +264,7 @@ function doSort(key) {
         '<td>' + (l.sqm_build ?? '—') + '</td>' +
         '<td>₪' + (l.price || 0).toLocaleString() + '</td>' +
         '<td>' + (l.price_per_sqm ? '₪' + l.price_per_sqm.toLocaleString() : '—') + '</td>' +
-        '<td><a href="' + mapsUrl + '" target="_blank">📍 מפה</a></td>' +
+        '<td><a class="icon-btn maps" href="' + mapsUrl + '" target="_blank" title="הצג במפה">📍</a></td>' +
         '</tr>';
     }).join('');
     document.getElementById('rows').innerHTML = html || '<tr><td colspan="12" class="muted">אין תוצאות</td></tr>';
