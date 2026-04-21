@@ -50,8 +50,18 @@ def score_listing(listing: Listing) -> tuple[float, dict[str, Any]]:
     neighborhood = listing.neighborhood
 
     # 1. PRICE vs MARKET (30% → ±3)
-    lo, hi = market_band(city, neighborhood)
-    reasons["market_band"] = [lo, hi]
+    # Prefer fair_price_estimate from real comps; fall back to MARKET_REFS bands.
+    if listing.fair_price_estimate and listing.sqm and listing.sqm > 0:
+        fair_ppsqm = listing.fair_price_estimate / listing.sqm
+        lo = int(fair_ppsqm * 0.90)
+        hi = int(fair_ppsqm * 1.10)
+        reasons["market_band"] = [lo, hi]
+        reasons["market_band_source"] = "comps"
+    else:
+        lo, hi = market_band(city, neighborhood)
+        reasons["market_band"] = [lo, hi]
+        reasons["market_band_source"] = "market_refs"
+
     if ppsqm:
         mid = (lo + hi) / 2
         if ppsqm < lo * 0.85:

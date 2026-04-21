@@ -1,0 +1,172 @@
+{
+  "pageProps": {
+    "dehydratedState": {
+      "queries": [
+        {
+          "state": {
+            "data": {
+              "private": [
+                {
+                  "address": {
+                    "region": {
+                      "text": "תל אביב והסביבה",
+                      "id": 3
+                    },
+                    "city": {
+                      "text": "תל אביב יפו"
+                    },
+                    "area": {
+                      "text": "אזור תל אביב יפו"
+                    },
+                    "neighborhood": {
+                      "text": "מונטיפיורי, הרכבת"
+                    },
+                    "street": {
+                      "text": "דרך מנחם בגין"
+                    },
+                    "house": {
+                      "number": 158,
+                      "floor": 25
+                    },
+                    "coords": {
+                      "lat": 32.080073,
+                      "lon": 34.795907
+                    }
+                  },
+                  "subcategoryId": 1,
+                  "categoryId": 2,
+                  "adType": "private",
+                  "price": 3660000,
+                  "token": "c6j6srak",
+                  "additionalDetails": {
+                    "property": {
+                      "text": "דירה"
+                    },
+                    "roomsCount": 3,
+                    "squareMeter": 86,
+                    "propertyCondition": {
+                      "id": 6
+                    }
+                  },
+                  "metaData": {
+                    "coverImage": "https://img.yad2.co.il/Pic/202604/03/2_1/o/y2_1pa_010682_20260403160639.jpeg",
+                    "images": [
+                      "https://img.yad2.co.il/Pic/202604/03/2_1/o/y2_1pa_010682_20260403160639.jpeg",
+                      "https://img.yad2.co.il/Pic/202604/03/2_1/o/y2_1pa_010798_20260403160634.jpeg",
+                      "https://img.yad2.co.il/Pic/202604/03/2_1/o/y2_1pa_010472_20260403160635.jpeg",
+                      "https://img.yad2.co.il/Pic/202604/03/2_1/o/y2_1pa_010711_20260403160641.jpeg",
+                      "https://img.yad2.co.il/Pic/202604/03/2_1/o/y2_1pa_010612_20260403160634.jpeg",
+                      "https://img.yad2.co.il/Pic/202604/03/2_1/o/y2_6pa_010903_20260403170730.jpeg"
+                    ],
+                    "squareMeterBuild": 76
+                  },
+                  "tags": [
+                    {
+                      "name": "חניה",
+                      "id": 903,
+                      "priority": 1
+                    },
+                    {
+                      "name": "3 כיווני אוויר",
+                      "id": 907,
+                      "priority": 1
+                    },
+                    {
+                      "name": "ממ\"ד",
+                      "id": 909,
+                      "priority": 1
+                    }
+                  ],
+                  "orderId": 56765229,
+                  "priority": 3,
+                  "_feed_section": "private"
+                },
+                {
+                  "address": {
+                    "region": {
+                      "text": "תל אביב והסביבה",
+                      "id": 3
+                    },
+                    "city": {
+                      "text": "תל אביב יפו"
+                    },
+                    "area": {
+                      "text": "אזור תל אביב יפו"
+                    },
+                    "street": {
+                      "text": "שמואל ירחינאי"
+                    },
+                    "house": {
+                      "floor": 0
+                    },
+                    "coords": {
+                      "lon": 34.7555916296296,
+                      "lat": 32.0452394074074
+                    }
+                  },
+                  "subcategoryId": 5,
+                  "categoryId": 2,
+                  "adType": "commercial",
+                  "price": 4150000,
+                  "token": "jg5nvnoj",
+                  "additionalDetails": {
+                    "property": {
+                      "text": "דירת גן"
+                    },
+                    "roomsCount": 4,
+                    "squareMeter": 164,
+                    "propertyCondition": {
+                      "id": 6
+                    }
+                  },
+                  "inProperty": {
+                    "isAssetExclusive": true
+                  },
+                  "metaData": {
+                    "coverImage": "https://img.yad2.co.il/Pic/202604/13/2_5/o/y2_1pa_010682_20260413153458.jpeg",
+                    "images": [
+                      "https://img.yad2.co.il/Pic/202604/13/2_5/o/y2_1pa_010682_20260413153458.jpeg",
+                      "https://img.yad2.co.il/Pic/202604/13/2_5/o/y2_1pa_010697_20260413153459.jpeg",
+                      "https://img.yad2.co.il/Pic/202604/13/2_5/o/y2_1pa_010932_20260413153457.jpeg",
+                      "https://img.yad2.co.il/Pic/202604/13/2_5/o/y2_1pa_010599_20260413153650.jpeg"
+                    ],
+                    "squareMeterBuild": 133
+                  },
+                  "customer": {
+                    "agencyName": "Home Market",
+                    "agencyLogo": "//images.yad2.co.il/Pic/TivMiniSite/y2_1_04702_20200610130624.jpeg?t=1776783107869"
+                  },
+                  "tags": [
+                    {
+                      "name": "נכס חדש",
+                      "id": 1101,
+                      "priority": 1
+                    },
+                    {
+                      "name": "חניה",
+                      "id": 1103,
+                      "priority": 1
+                    },
+                    {
+                      "name": "ממ\"ד",
+                      "id": 1109,
+                      "priority": 1
+                    }
+                  ],
+                  "orderId": 56799515,
+                  "priority": 3,
+                  "packages": {},
+                  "_feed_section": "agency"
+                }
+              ],
+              "pagination": {
+                "currentPage": 1,
+                "totalPages": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -16,6 +16,7 @@ from deal_hunter.models import Listing, ScanResult
 from deal_hunter.notify import telegram
 from deal_hunter.repo.listings_repo import ListingsRepo
 from deal_hunter.scoring.heuristic import score_listing
+from deal_hunter.valuation.fair_price import enrich_listing_fair_price
 
 log = logging.getLogger("deal_hunter")
 
@@ -59,6 +60,11 @@ def run_once(cfg: cfg_mod.Config, *, enrich: bool = False, max_items: int | None
                             adapter.fetch_detail(listing)
                         except Exception as e:
                             result.errors.append(f"enrich {listing.source_id}: {e}")
+                    # Fair-price valuation (uses comps already in DB from prior runs)
+                    try:
+                        enrich_listing_fair_price(listing, repo.conn)
+                    except Exception as e:
+                        log.debug("fair_price skipped for %s: %s", listing.source_id, e)
                     score, reasons = score_listing(listing)
                     listing.score = score
                     listing.score_reasons = reasons
@@ -120,6 +126,85 @@ def cmd_run(args: argparse.Namespace) -> int:
         time.sleep(interval_sec)
 
 
+def cmd_comps_refresh(args: argparse.Namespace) -> int:
+    """Pre-populate the comps table from Yad2 deals for a sample of current listings."""
+    import hashlib
+    import json as _json
+
+    cfg = cfg_mod.load(args.config)
+    db_path = Path(cfg.data_dir) / "deal-hunter.db"
+    max_listings = args.max_listings
+
+    with ListingsRepo(db_path) as repo:
+        rows = repo.conn.execute(
+            "SELECT source, source_id, city, neighborhood, source_payload "
+            "FROM listings ORDER BY score DESC NULLS LAST LIMIT ?",
+            (max_listings,),
+        ).fetchall()
+
+        if not rows:
+            log.info("comps refresh: no listings in DB yet — run 'deal-hunter run --once' first")
+            return 0
+
+        from deal_hunter.comps.yad2_deals import Yad2DealsProvider
+
+        adapter = Yad2Adapter(
+            cities=[c.model_dump() for c in cfg.cities],
+            search=cfg.search.model_dump(),
+            max_pages=cfg.schedule.max_pages,
+            request_delay_sec=cfg.schedule.delay_between_requests_sec,
+        )
+        provider = Yad2DealsProvider()
+        bid = adapter._get_build_id()
+        if not bid:
+            log.error("comps refresh: cannot get Yad2 build id")
+            return 1
+
+        total = 0
+        for row in rows:
+            source = row[0]
+            token = row[1]
+            city = row[2]
+            neighborhood = row[3]
+            payload = _json.loads(row[4] or "{}")
+            slug = payload.get("_slug", cfg.cities[0].slug if cfg.cities else "tel-aviv-area")
+
+            if source != "yad2":
+                continue
+
+            comps = provider.comps_for_listing(
+                token, bid, slug,
+                city=city, neighborhood=neighborhood,
+            )
+            if not comps:
+                continue
+
+            dicts = []
+            for c in comps:
+                ah = hashlib.sha1(
+                    "|".join([c.city, c.neighborhood, c.street, c.house_number]).lower().encode()
+                ).hexdigest()[:16]
+                dicts.append({
+                    "address_hash": ah,
+                    "deal_date": c.deal_date,
+                    "price": c.price,
+                    "sqm": c.sqm,
+                    "rooms": c.rooms,
+                    "city": c.city,
+                    "neighborhood": c.neighborhood,
+                    "street": c.street,
+                    "house_number": c.house_number,
+                    "year_built": c.year_built,
+                    "raw": c.raw,
+                })
+            n = repo.upsert_comps("yad2_deals", dicts)
+            total += n
+            log.info("comps refresh: token=%s → %d comps persisted", token, n)
+
+        log.info("comps refresh done: %d total comps upserted", total)
+    return 0
+
+
 def cmd_dashboard(args: argparse.Namespace) -> int:
     from deal_hunter.web.app import serve
 
@@ -139,6 +224,15 @@ def main() -> int:
     run_p.add_argument("--enrich", action="store_true", help="Fetch detail pages (slower)")
     run_p.add_argument("--max-items", type=int, default=None, help="Cap listings per source (dev)")
     run_p.set_defaults(func=cmd_run)
+
+    comps_p = sub.add_parser("comps", help="Comps management")
+    comps_sub = comps_p.add_subparsers(dest="comps_cmd", required=True)
+    refresh_p = comps_sub.add_parser("refresh", help="Pull closed-deal comps for top listings")
+    refresh_p.add_argument(
+        "--max-listings", type=int, default=50,
+        help="How many top-scored listings to fetch comps for (default 50)",
+    )
+    refresh_p.set_defaults(func=cmd_comps_refresh)
 
     dash_p = sub.add_parser("dashboard", help="Serve the dashboard HTTP")
     dash_p.set_defaults(func=cmd_dashboard)

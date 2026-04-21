@@ -16,7 +16,7 @@ from typing import Any, Iterable
 
 from deal_hunter.adapters.base import SearchFilters
 from deal_hunter.http_client import fetch
-from deal_hunter.models import Listing
+from deal_hunter.models import Comp, Listing
 
 log = logging.getLogger(__name__)
 
@@ -56,6 +56,22 @@ class Yad2Adapter:
         slug = listing.source_payload.get("_slug", self.cities[0].get("slug", "tel-aviv-area"))
         self._enrich(listing, bid, slug)
         return listing
+
+    def fetch_detail_with_comps(self, listing: Listing) -> tuple[Listing, list[Comp]]:
+        """Enrich listing AND extract comps from the same HTML fetch. Returns (listing, comps)."""
+        from deal_hunter.comps.yad2_deals import extract_comps_from_html
+
+        bid = self._get_build_id()
+        if not bid:
+            return listing, []
+        slug = listing.source_payload.get("_slug", self.cities[0].get("slug", "tel-aviv-area"))
+        html = self._enrich(listing, bid, slug)
+        comps: list[Comp] = []
+        if html:
+            comps = extract_comps_from_html(
+                html, source_city=listing.city, source_neighborhood=listing.neighborhood
+            )
+        return listing, comps
 
     # ---- internals ------------------------------------------------------
 
@@ -196,7 +212,8 @@ class Yad2Adapter:
             source_payload={"_slug": city.get("slug", "")},
         )
 
-    def _enrich(self, listing: Listing, build_id: str, slug: str) -> None:
+    def _enrich(self, listing: Listing, build_id: str, slug: str) -> str | None:
+        """Enrich listing from JSON or HTML. Returns the HTML page (if fetched) for reuse."""
         token = listing.source_id
         time.sleep(1.0 + random.uniform(0.3, 1.0))
         for url in (
@@ -208,7 +225,8 @@ class Yad2Adapter:
                 item = _extract_item_from_json(data)
                 if item:
                     _apply_json_enrichment(listing, item)
-                    return
+                    # Still return None — caller must do an HTML fetch for comps
+                    return None
         html_url = f"{BASE}/realestate/item/{slug}/{token}"
         html = fetch(html_url, as_json=False)
         if html:
@@ -222,6 +240,7 @@ class Yad2Adapter:
                 listing.parking = True
             if not listing.mamad and ('ממ"ד' in hl or "ממד" in hl):
                 listing.mamad = True
+        return html
 
 
 def _extract_items(data: dict[str, Any]) -> list[dict[str, Any]]:
