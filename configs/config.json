@@ -1,29 +1,31 @@
 {
   "search": {
-    "rooms_min": 2.5,
-    "rooms_max": 5,
+    "rooms_min": 6,
+    "rooms_max": 15,
     "price_min": 1800000,
-    "price_max": 10000000,
-    "min_sqm": 55,
+    "price_max": 5500000,
+    "min_sqm": 200,
     "max_listing_age_days": 30,
     "exclude_ground_floor": false
   },
   "cities": [
     {
-      "name": "Tel Aviv",
-      "city_code": "5000",
-      "slug": "tel-aviv-area",
-      "onmap_slug": "tel-aviv-yafo",
-      "hebrew_name": "תל אביב-יפו",
+      "name": "Ariel",
+      "city_code": "7100",
+      "slug": "ariel",
+      "yad2_id": "3570",
+      "onmap_slug": "ariel",
+      "hebrew_name": "אריאל",
       "filter_areas": false,
       "area_keywords": []
     },
     {
-      "name": "Ramat Gan",
-      "city_code": "8600",
-      "slug": "tel-aviv-area",
-      "onmap_slug": "ramat-gan",
-      "hebrew_name": "רמת גן",
+      "name": "Beit Shemesh",
+      "city_code": "3000",
+      "slug": "beit-shemesh",
+      "yad2_id": "2610",
+      "onmap_slug": "beit-shemesh",
+      "hebrew_name": "בית שמש",
       "filter_areas": false,
       "area_keywords": []
     }
