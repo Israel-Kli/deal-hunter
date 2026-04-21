@@ -109,7 +109,7 @@ class Yad2Adapter:
         if page > 1:
             params.append(("page", str(page)))
         qs = "&".join(f"{k}={v}" for k, v in params)
-        slug = city.get("slug", "israel")
+        slug = city.get("yad2_id") or city.get("slug", "israel")
         return f"{BASE}/realestate/_next/data/{build_id}/forsale/{slug}.json?{qs}"
 
     def _iter_city(self, build_id: str, city: dict[str, Any]) -> Iterable[Listing]:
