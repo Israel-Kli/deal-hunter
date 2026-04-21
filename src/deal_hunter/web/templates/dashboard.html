@@ -91,7 +91,6 @@
         <th class="sort" data-key="sqm_build">מ"ר בנוי</th>
         <th class="sort" data-key="price">מחיר</th>
         <th class="sort" data-key="price_per_sqm">₪/מ"ר</th>
-        <th>מפה</th>
       </tr>
     </thead>
     <tbody id="rows"></tbody>
@@ -247,7 +246,7 @@ function doSort(key) {
     const html = rows.map(l => {
       const mapsUrl = 'https://www.google.com/maps?q=' + encodeURIComponent((l.street || '') + ', ' + (l.city || ''));
       const badge = l.is_agent
-        ? '<span class="agent-badge makler" title="מקלר/סוכן">מקלר</span>'
+        ? '<span class="agent-badge makler" title="תווך/סוכן">תווך</span>'
         : '<span class="agent-badge private" title="מוכר פרטי">פרטי</span>';
       const desc = l.description || '';
       const truncated = desc.length > 80 ? desc.substring(0, 80) + '...' : desc;
@@ -257,17 +256,16 @@ function doSort(key) {
         '<td>' + (l.city || '—') + '</td>' +
         '<td><a class="icon-btn" href="' + l.url + '" target="_blank" title="פתח מודעה במקור">🔗</a></td>' +
         '<td>' + badge + '</td>' +
-        '<td>' + (l.address || '—') + '</td>' +
+        '<td>' + (l.address || '—') + ' <a class="icon-btn maps" href="' + mapsUrl + '" target="_blank" title="הצג במפה" style="display:inline-flex;vertical-align:middle;margin-right:4px;width:24px;height:24px;font-size:14px;">📍</a></td>' +
         '<td>' + descHtml + '</td>' +
         '<td>' + (l.rooms ?? '—') + '</td>' +
         '<td>' + (l.sqm ?? '—') + '</td>' +
         '<td>' + (l.sqm_build ?? '—') + '</td>' +
         '<td>₪' + (l.price || 0).toLocaleString() + '</td>' +
         '<td>' + (l.price_per_sqm ? '₪' + l.price_per_sqm.toLocaleString() : '—') + '</td>' +
-        '<td><a class="icon-btn maps" href="' + mapsUrl + '" target="_blank" title="הצג במפה">📍</a></td>' +
         '</tr>';
     }).join('');
-    document.getElementById('rows').innerHTML = html || '<tr><td colspan="12" class="muted">אין תוצאות</td></tr>';
+    document.getElementById('rows').innerHTML = html || '<tr><td colspan="11" class="muted">אין תוצאות</td></tr>';
   document.querySelectorAll('th.sort').forEach(th => {
     th.classList.toggle('sort-asc', th.dataset.key === sortKey && sortAsc);
     th.classList.toggle('sort-desc', th.dataset.key === sortKey && !sortAsc);
