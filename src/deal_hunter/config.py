@@ -75,6 +75,7 @@ class Config(BaseModel):
     notifications: NotificationsCfg = Field(default_factory=NotificationsCfg)
     scoring: ScoringCfg = Field(default_factory=ScoringCfg)
     dashboard_port: int = 8081
+    dashboard_host: str = "127.0.0.1"
     data_dir: str = "data"
     onmap_cities: list[str] = Field(default_factory=list)
     ad_city_paths: list[str] = Field(default_factory=list)

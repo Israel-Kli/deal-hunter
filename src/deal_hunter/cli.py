@@ -336,7 +336,7 @@ def cmd_dashboard(args: argparse.Namespace) -> int:
     from deal_hunter.web.app import serve
 
     cfg = cfg_mod.load(args.config)
-    serve(cfg)
+    serve(cfg, host=cfg.dashboard_host)
     return 0
 
 
