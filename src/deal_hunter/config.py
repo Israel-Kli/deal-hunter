@@ -77,6 +77,7 @@ class Config(BaseModel):
     dashboard_port: int = 8081
     data_dir: str = "data"
     onmap_cities: list[str] = Field(default_factory=list)
+    ad_city_paths: list[str] = Field(default_factory=list)
 
 
 def _env_override(cfg: dict[str, Any]) -> dict[str, Any]:

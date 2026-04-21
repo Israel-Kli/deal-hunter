@@ -51,5 +51,6 @@
   },
   "dashboard_port": 8081,
   "data_dir": "data",
-  "onmap_cities": ["tel-aviv-yafo", "ramat-gan", "givatayim"]
+  "onmap_cities": ["tel-aviv-yafo", "ramat-gan", "givatayim"],
+  "ad_city_paths": ["/city/tel-aviv", "/city/ramat-gan"]
 }

@@ -11,6 +11,7 @@ from pathlib import Path
 
 from deal_hunter import config as cfg_mod
 from deal_hunter.adapters.base import SearchFilters
+from deal_hunter.adapters.ad import AdAdapter
 from deal_hunter.adapters.onmap import OnMapAdapter
 from deal_hunter.adapters.yad2 import Yad2Adapter
 from deal_hunter.models import Listing, ScanResult
@@ -50,7 +51,17 @@ def _adapters(cfg: cfg_mod.Config):
                 request_delay_sec=cfg.schedule.delay_between_requests_sec,
             )
         )
-    # Madlan / ad adapters added later in M3.
+    if cfg.sources.ad:
+        paths = cfg.ad_city_paths or ["/nadlansale"]
+        out.append(
+            AdAdapter(
+                city_paths=paths,
+                search=cfg.search.model_dump(),
+                max_pages=cfg.schedule.max_pages,
+                request_delay_sec=cfg.schedule.delay_between_requests_sec,
+            )
+        )
+    # Madlan adapter still deferred (PerimeterX CAPTCHA).
     return out
 
 
