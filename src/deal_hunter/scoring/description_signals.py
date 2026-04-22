@@ -15,7 +15,6 @@ def combined_search_text(listing: Listing) -> str:
     return he.casefold()
 
 
-_MULTI_UNIT_STRONG = ("יחידות דיור", "יחידת דיור")
 _GARDEN_MARKERS = (
     "גינה גדולה",
     "גינה ענקית",
@@ -29,24 +28,25 @@ _GARDEN_MARKERS = (
 
 
 def multi_unit_bonus_and_matches(text: str) -> tuple[float, list[str]]:
-    """Positive adjustment (capped) when text mentions apartment / דיור (pro for this product)."""
+    """Positive adjustment (capped) only for explicit phrases (same set as dashboard highlights)."""
     matched: list[str] = []
     bonus = 0.0
     t = text
-    for ph in _MULTI_UNIT_STRONG:
-        if ph in t:
-            matched.append(ph)
-            bonus += 0.45
+    if "יחידות דיור" in t:
+        matched.append("יחידות דיור")
+        bonus += 0.38
+    if "יחידת דיור" in t:
+        matched.append("יחידת דיור")
+        bonus += 0.38
+    if "מחולקת" in t:
+        matched.append("מחולקת")
+        bonus += 0.32
+    elif "מחולק" in t:
+        matched.append("מחולק")
+        bonus += 0.28
     if "apartment" in t:
-        if "apartment" not in matched:
-            matched.append("apartment")
-        bonus += 0.35
-    if "יחידת" in t and "יחידת דיור" not in t:
-        matched.append("יחידת")
-        bonus += 0.22
-    if "דיור" in t and "יחידות דיור" not in t and "יחידת דיור" not in t:
-        matched.append("דיור")
-        bonus += 0.18
+        matched.append("apartment")
+        bonus += 0.28
     cap = 1.0
     return min(cap, bonus), matched
 
