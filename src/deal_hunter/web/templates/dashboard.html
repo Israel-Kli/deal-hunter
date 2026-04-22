@@ -9,11 +9,11 @@
   h1 { margin:0 0 16px; font-size:20px; }
   .bar { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
   input, select { background:#fff; color:#1a1a2e; border:1px solid #d1d5db; border-radius:6px; padding:6px 10px; font-size:14px; }
-  table { width:100%; border-collapse:collapse; font-size:13px; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.08); }
-  th, td { padding:8px 10px; border-bottom:1px solid #e5e7eb; text-align:right; }
+  table { width:100%; border-collapse:collapse; font-size:12px; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  th, td { padding:4px 8px; border-bottom:1px solid #e5e7eb; text-align:right; vertical-align:middle; }
   th { background:#e8ecf1; position:sticky; top:0; }
   tr:hover { background:#f0f4ff; }
-  .score { display:inline-block; min-width:38px; padding:3px 8px; border-radius:6px; text-align:center; font-weight:600; }
+  .score { display:inline-block; min-width:34px; padding:2px 6px; border-radius:6px; text-align:center; font-weight:600; font-size:12px; cursor:pointer; }
   .s-hot   { background:#22c55e; color:#fff; }
   .s-warm  { background:#f59e0b; color:#fff; }
   .s-cold  { background:#9ca3af; color:#fff; }
@@ -28,17 +28,22 @@
   th.sort.sort-desc::after { content:' ↓'; opacity:1; }
   .scoring-info { background:#fff; border-radius:8px; padding:12px 16px; margin-bottom:16px; font-size:12px; color:#4b5563; box-shadow:0 1px 3px rgba(0,0,0,.08); line-height:1.6; }
   .scoring-info b { color:#1a1a2e; }
-  .btn-scan { background:#3b82f6; color:#fff; border:none; border-radius:6px; padding:6px 14px; font-size:14px; cursor:pointer; }
-  .btn-reset { background:#ef4444; color:#fff; border:none; border-radius:6px; padding:6px 14px; font-size:14px; cursor:pointer; }
+  .btn { border:none; border-radius:6px; padding:6px 14px; font-size:14px; cursor:pointer; }
+  .btn-refresh { background:#64748b; color:#fff; }
+  .btn-refresh:hover { background:#475569; }
+  .btn-scan { background:#3b82f6; color:#fff; }
+  .btn-reset { background:#ef4444; color:#fff; }
   .agent-badge { display:inline-block; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:600; }
   .agent-badge.makler { background:#f59e0b; color:#fff; }
   .agent-badge.private { background:#22c55e; color:#fff; }
-  .desc-cell { max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:help; font-size:12px; color:#6b7280; }
+  .desc-cell { max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:help; font-size:11px; color:#6b7280; }
   .desc-cell:hover { white-space:normal; word-break:break-word; }
-  .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:6px; border:1px solid #d1d5db; background:#fff; color:#2563eb; font-size:16px; cursor:pointer; text-decoration:none; transition:background .15s; }
+  .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:6px; border:1px solid #d1d5db; background:#fff; color:#2563eb; font-size:14px; cursor:pointer; text-decoration:none; transition:background .15s; }
   .icon-btn:hover { background:#e0e7ff; text-decoration:none; }
   .icon-btn.maps { color:#1a73e8; }
   .icon-btn.maps:hover { background:#d2e3fc; }
+  .unit-flag { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:4px; border:1px solid #22c55e; background:#ecfdf5; color:#15803d; font-size:11px; font-weight:700; }
+  .unit-flag[hidden] { visibility:hidden; }
 </style>
 </head>
 <body>
@@ -65,17 +70,18 @@
       <option value="private">פרטי בלבד</option>
       <option value="agent">מקרלר בלבד</option>
     </select>
-    <button onclick="load()">רענן</button>
-    <button id="scanBtn" class="btn-scan" onclick="triggerScan()">🔍 סריקה ידנית</button>
-    <button id="resetBtn" class="btn-reset" onclick="resetDb()">🔄 איפוס DB</button>
+    <button type="button" class="btn btn-refresh" onclick="load()">רענן</button>
+    <button type="button" id="scanBtn" class="btn btn-scan" onclick="triggerScan()">🔍 סריקה ידנית</button>
+    <button type="button" id="resetBtn" class="btn btn-reset" onclick="resetDb()">🔄 איפוס DB</button>
   </div>
   <div class="scoring-info">
-    <b>ציון (1-10):</b>
-    מחיר מול שוק (30%) — ₪/מ"ר מתחת לטווח → ציון גבוה |
-    תשואה משוערת (20%) — תשואה שכירות גבוהה → ציון גבוה |
-    מתקנים (20%) — חניה, מעלית, מרפסת, ממ"ד, שיפוץ → בונוס |
-    מו"מ (15%) — מוכר פרטי / ירידת מחיר → בונוס |
-    סיכון (15%) — ללא מעלית בקומה גבוהה, ללא ממ"ד, מחיר גבוה → הפחתה
+    <b>ציון (1–10):</b>
+    מחיר מול שוק (חלק חלק) — ₪/מ״ר ביחס לטווח (כולל עסקאות דומות כשזמין) |
+    תיאור — דיור/יחידת דיור/apartment מוריד; גינה/חצר גדולה +מעלה; חדרים רבים +מעלה (בתקרה) |
+    מתקנים — חניה, מרפסת, ממ״ד, שיפוץ (ללא מעלית) |
+    מוכר — פרטי עדיף על תיווך |
+    מו״מ — ירידת מחיר |
+    סיכון — ללא ממ״ד (לא בית), מחיר גבוה
   </div>
   <table>
     <thead>
@@ -86,6 +92,7 @@
         <th>סוג</th>
         <th>כתובת</th>
         <th>תיאור</th>
+        <th title="מזוהה בתיאור: דיור / יחידת דיור / apartment">דיור?</th>
         <th class="sort" data-key="rooms">חדרים</th>
         <th class="sort" data-key="sqm">מ"ר (פרסום)</th>
         <th class="sort" data-key="sqm_build">מ"ר בנוי</th>
@@ -97,7 +104,7 @@
   </table>
   <div id="scoreModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:100;justify-content:center;align-items:center;">
     <div style="background:#fff;border-radius:12px;padding:24px;max-width:480px;width:90%;max-height:80vh;overflow-y:auto;position:relative;">
-      <button onclick="closeScore()" style="position:absolute;top:12px;left:12px;background:none;border:none;font-size:20px;cursor:pointer;">✕</button>
+      <button type="button" onclick="closeScore()" style="position:absolute;top:12px;left:12px;background:none;border:none;font-size:20px;cursor:pointer;">✕</button>
       <h2 style="margin:0 0 16px;font-size:18px;">פירוט ציון</h2>
       <div id="scoreDetails"></div>
     </div>
@@ -106,6 +113,113 @@
 let all = [];
 let sortKey = 'score';
 let sortAsc = false;
+function encodeReasonsB64(obj) {
+  try {
+    return btoa(unescape(encodeURIComponent(JSON.stringify(obj || {}))));
+  } catch (e) { return ''; }
+}
+function scoreClass(s) {
+  if (s == null) return 's-cold';
+  if (s >= 8) return 's-hot';
+  if (s >= 6) return 's-warm';
+  return 's-cold';
+}
+function streetOrMapLink(l) {
+  const lat = parseFloat(l.lat);
+  const lon = parseFloat(l.lon);
+  if (Number.isFinite(lat) && Number.isFinite(lon)) {
+    return {
+      href: 'https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=' + lat + ',' + lon,
+      title: 'מבט רחוב (Google Street View)'
+    };
+  }
+  const q = (l.address || ((l.street || '') + ', ' + (l.city || ''))).trim();
+  return {
+    href: 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q || 'ישראל'),
+    title: 'מפה — Street View כשהמודעה כוללת קואורדינטות'
+  };
+}
+function fmtScoreReasons(reasons) {
+  if (!reasons || !Object.keys(reasons).length) return '<p class="muted">אין נתוני ציון</p>';
+  const map = {
+    price_vs_market: 'מחיר מול שוק',
+    price_vs_market_delta: 'שינוי ציון (מחיר)',
+    amenity_bonus: 'בונוס מתקנים',
+    seller_channel: 'סוג מוכר',
+    seller_adjustment: 'התאמת מוכר',
+    price_drop_pct: 'ירידת מחיר',
+    price_drop_bonus: 'בונוס ירידת מחיר',
+    risk_no_mamad: 'סיכון: ללא ממ"ד',
+    risk_liquidity: 'סיכון: נזילות',
+    market_band: 'טווח שוק',
+    market_band_source: 'מקור טווח שוק',
+    description_unit_hit: 'איתות דיור בתיאור',
+    matched_unit_phrases: 'ביטויים שזוהו',
+    description_unit_adjustment: 'התאמת תיאור (דיור)',
+    garden_bonus: 'בונוס גינה/חצר',
+    room_layout_bonus: 'בונוס חדרים',
+    outdoor_rooms_bonus: 'סה״כ גינה+חדרים',
+    matched_garden_phrases: 'ביטויי גינה',
+    final: 'ציון סופי',
+  };
+  const labels = {
+    comps: 'עסקאות סגורות',
+    market_refs: 'התייחסות שוק',
+    agent: 'תיווך',
+    private: 'פרטי',
+    'exceptional (>15% below band)': 'מצוין (>15% מתחת לטווח)',
+    'below band': 'מתחת לטווח',
+    'below midpoint': 'מתחת לאמצע הטווח',
+    'in band': 'בתוך הטווח',
+    'above band': 'מעל הטווח',
+    'much above band': 'הרבה מעל הטווח',
+  };
+  const priority = ['market_band','market_band_source','price_vs_market_delta','price_vs_market','description_unit_hit','matched_unit_phrases','description_unit_adjustment','garden_bonus','room_layout_bonus','outdoor_rooms_bonus','matched_garden_phrases','amenity_bonus','seller_channel','seller_adjustment','price_drop_pct','price_drop_bonus','risk_no_mamad','risk_liquidity'];
+  const entries = Object.entries(reasons).filter(([k]) => k !== 'final');
+  entries.sort((a, b) => {
+    const ia = priority.indexOf(a[0]);
+    const ib = priority.indexOf(b[0]);
+    const va = ia === -1 ? 999 : ia;
+    const vb = ib === -1 ? 999 : ib;
+    return va - vb;
+  });
+  let html = '';
+  for (const [key, val] of entries) {
+    if (key === 'market_band') {
+      const lo = val[0], hi = val[1];
+      html += '<div><b>' + (map[key] || key) + ':</b> ₪' + (lo||0).toLocaleString() + ' – ₪' + (hi||0).toLocaleString() + '/מ״ר</div>';
+      continue;
+    }
+    let displayVal;
+    if (Array.isArray(val)) displayVal = val.join(', ');
+    else if (typeof val === 'boolean') displayVal = val ? 'כן' : 'לא';
+    else if (typeof val === 'number') displayVal = (key === 'price_drop_pct' ? val + '%' : val);
+    else displayVal = labels[val] || val;
+    html += '<div><b>' + (map[key] || key) + ':</b> ' + displayVal + '</div>';
+  }
+  if (reasons.final != null) {
+    html += '<div style="margin-top:12px;padding:12px;background:#f0f4ff;border-radius:8px;font-weight:700;font-size:16px;">ציון סופי: ' + reasons.final + '/10</div>';
+  }
+  return html;
+}
+function showScoreReasons(reasons) {
+  document.getElementById('scoreDetails').innerHTML = fmtScoreReasons(reasons || {});
+  document.getElementById('scoreModal').style.display = 'flex';
+}
+function closeScore() {
+  document.getElementById('scoreModal').style.display = 'none';
+}
+document.getElementById('scoreModal').addEventListener('click', function(e) {
+  if (e.target === this) closeScore();
+});
+document.getElementById('rows').addEventListener('click', function(e) {
+  const el = e.target.closest('.score');
+  if (!el || !el.dataset.rb64) return;
+  try {
+    const json = decodeURIComponent(escape(atob(el.dataset.rb64)));
+    showScoreReasons(JSON.parse(json));
+  } catch (err) {}
+});
 async function load() {
   const r = await fetch('/api/listings');
   const d = await r.json();
@@ -157,122 +271,64 @@ async function triggerScan() {
     btn.textContent = '🔍 סריקה ידנית';
   }
 }
-function scoreClass(s) {
-  if (s == null) return 's-cold';
-  if (s >= 8) return 's-hot';
-  if (s >= 6) return 's-warm';
-  return 's-cold';
-}
-function scoreLabel(s) {
-  if (s == null) return '—';
-  if (s >= 8) return 'חזק';
-  if (s >= 6) return 'בינוני';
-  return 'חלש';
-}
-function fmtScoreReasons(reasons) {
-  if (!reasons || !Object.keys(reasons).length) return '<p class="muted">אין נתוני ציון</p>';
-  const map = {
-    price_vs_market: 'מחיר מול שוק',
-    est_yield_pct: 'תשואה משוערת',
-    amenity_bonus: 'בונוס מתקנים',
-    private_seller: 'מוכר פרטי',
-    price_drop_pct: 'ירידת מחיר',
-    risk_no_elevator_high_floor: 'סיכון: ללא מעלית בקומה גבוהה',
-    risk_no_mamad: 'סיכון: ללא ממ"ד',
-    risk_liquidity: 'סיכון: נזילות',
-    market_band: 'טווח שוק',
-    market_band_source: 'מקור טווח שוק',
-    final: 'ציון סופי',
-  };
-  const labels = {
-    comps: 'עסקאות סגורות',
-    market_refs: 'התייחסות שוק',
-    'exceptional (>15% below band)': 'מצוין (>15% מתחת לטווח)',
-    'below band': 'מתחת לטווח',
-    'below midpoint': 'מתחת לאמצע הטווח',
-    'in band': 'בתוך הטווח',
-    'above band': 'מעל הטווח',
-    'much above band': 'הרבה מעל הטווח',
-  };
-  let html = '';
-  for (const [key, val] of Object.entries(reasons)) {
-    if (key === 'final') {
-      html += '<div style="margin-top:12px;padding:12px;background:#f0f4ff;border-radius:8px;font-weight:700;font-size:16px;">ציון סופי: ' + val + '/10</div>';
-      continue;
-    }
-    if (key === 'market_band') {
-      const lo = val[0], hi = val[1];
-      html += '<div><b>' + (map[key] || key) + ':</b> ₪' + (lo||0).toLocaleString() + ' – ₪' + (hi||0).toLocaleString() + '/מ״ר</div>';
-      continue;
-    }
-    const displayVal = typeof val === 'boolean' ? (val ? '✓' : '✗') :
-      (typeof val === 'number' ? (key === 'est_yield_pct' ? val + '%' : key === 'price_drop_pct' ? val + '%' : val) : labels[val] || val);
-    html += '<div><b>' + (map[key] || key) + ':</b> ' + displayVal + '</div>';
-  }
-  return html;
-}
-function showScore(listing) {
-  document.getElementById('scoreDetails').innerHTML = fmtScoreReasons(listing.score_reasons || {});
-  document.getElementById('scoreModal').style.display = 'flex';
-}
-function closeScore() {
-  document.getElementById('scoreModal').style.display = 'none';
-}
-document.getElementById('scoreModal').addEventListener('click', function(e) {
-  if (e.target === this) closeScore();
-});
 function doSort(key) {
   if (sortKey === key) { sortAsc = !sortAsc; } else { sortKey = key; sortAsc = false; }
   render();
 }
-  function render() {
-    const q = document.getElementById('q').value.trim();
-    const src = document.getElementById('src').value;
-    const min = parseFloat(document.getElementById('minScore').value);
-    const agentFilter = document.getElementById('agentType').value;
-    let rows = all.filter(l => {
-      if (src && l.source !== src) return false;
-      if ((l.score ?? 0) < min) return false;
-      if (agentFilter === 'private' && l.is_agent) return false;
-      if (agentFilter === 'agent' && !l.is_agent) return false;
-      if (q && !(l.address || '').includes(q) && !(l.neighborhood || '').includes(q) && !(l.city || '').includes(q)) return false;
-      return true;
-    });
-    rows.sort((a, b) => {
-      const av = a[sortKey] ?? 0;
-      const bv = b[sortKey] ?? 0;
-      return sortAsc ? av - bv : bv - av;
-    });
-    const html = rows.map(l => {
-      const mapsUrl = 'https://www.google.com/maps?q=' + encodeURIComponent((l.street || '') + ', ' + (l.city || ''));
-      const badge = l.is_agent
-        ? '<span class="agent-badge makler" title="תווך/סוכן">תווך</span>'
-        : '<span class="agent-badge private" title="מוכר פרטי">פרטי</span>';
-      const desc = l.description || '';
-      const truncated = desc.length > 80 ? desc.substring(0, 80) + '...' : desc;
-      const descHtml = desc ? '<div class="desc-cell" title="' + escapeHtml(desc) + '">' + escapeHtml(truncated) + '</div>' : '';
-      return '<tr>' +
-        '<td><span class="score ' + scoreClass(l.score) + '" style="cursor:pointer" onclick="showScore(' + escapeHtml(JSON.stringify(l.score_reasons || {})) + ')">' + (l.score ?? '—') + '<br><small>' + scoreLabel(l.score) + '</small></span></td>' +
-        '<td>' + (l.city || '—') + '</td>' +
-        '<td><a class="icon-btn" href="' + l.url + '" target="_blank" title="פתח מודעה במקור">🔗</a></td>' +
-        '<td>' + badge + '</td>' +
-        '<td>' + (l.address || '—') + ' <a class="icon-btn maps" href="' + mapsUrl + '" target="_blank" title="הצג במפה" style="display:inline-flex;vertical-align:middle;margin-right:4px;width:24px;height:24px;font-size:14px;">📍</a></td>' +
-        '<td>' + descHtml + '</td>' +
-        '<td>' + (l.rooms ?? '—') + '</td>' +
-        '<td>' + (l.sqm ?? '—') + '</td>' +
-        '<td>' + (l.sqm_build ?? '—') + '</td>' +
-        '<td>₪' + (l.price || 0).toLocaleString() + '</td>' +
-        '<td>' + (l.price_per_sqm ? '₪' + l.price_per_sqm.toLocaleString() : '—') + '</td>' +
-        '</tr>';
-    }).join('');
-    document.getElementById('rows').innerHTML = html || '<tr><td colspan="11" class="muted">אין תוצאות</td></tr>';
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function render() {
+  const q = document.getElementById('q').value.trim();
+  const src = document.getElementById('src').value;
+  const min = parseFloat(document.getElementById('minScore').value);
+  const agentFilter = document.getElementById('agentType').value;
+  let rows = all.filter(l => {
+    if (src && l.source !== src) return false;
+    if ((l.score ?? 0) < min) return false;
+    if (agentFilter === 'private' && l.is_agent) return false;
+    if (agentFilter === 'agent' && !l.is_agent) return false;
+    if (q && !(l.address || '').includes(q) && !(l.neighborhood || '').includes(q) && !(l.city || '').includes(q)) return false;
+    return true;
+  });
+  rows.sort((a, b) => {
+    const av = a[sortKey] ?? 0;
+    const bv = b[sortKey] ?? 0;
+    return sortAsc ? av - bv : bv - av;
+  });
+  const html = rows.map(l => {
+    const sm = streetOrMapLink(l);
+    const badge = l.is_agent
+      ? '<span class="agent-badge makler" title="תווך/סוכן">תווך</span>'
+      : '<span class="agent-badge private" title="מוכר פרטי">פרטי</span>';
+    const desc = l.description || '';
+    const truncated = desc.length > 80 ? desc.substring(0, 80) + '...' : desc;
+    const descHtml = desc ? '<div class="desc-cell" title="' + escapeHtml(desc) + '">' + escapeHtml(truncated) + '</div>' : '';
+    const unitHit = !!(l.score_reasons && l.score_reasons.description_unit_hit);
+    const unitCell = unitHit
+      ? '<span class="unit-flag" title="בתיאור המודעה זוהו מילים כמו דיור / יחידת דיור / apartment — עשוי להצביע על יחידת דיור ולא רק בית פרטי">✓</span>'
+      : '<span class="unit-flag" hidden aria-hidden="true">·</span>';
+    const rb64 = encodeReasonsB64(l.score_reasons || {});
+    return '<tr>' +
+      '<td><span class="score ' + scoreClass(l.score) + '" data-rb64="' + rb64 + '">' + (l.score ?? '—') + '</span></td>' +
+      '<td>' + (l.city || '—') + '</td>' +
+      '<td><a class="icon-btn" href="' + l.url + '" target="_blank" rel="noopener" title="פתח מודעה במקור">🔗</a></td>' +
+      '<td>' + badge + '</td>' +
+      '<td>' + (l.address || '—') + ' <a class="icon-btn maps" href="' + sm.href + '" target="_blank" rel="noopener" title="' + escapeHtml(sm.title) + '" style="display:inline-flex;vertical-align:middle;margin-right:4px;width:24px;height:24px;font-size:14px;">📍</a></td>' +
+      '<td>' + descHtml + '</td>' +
+      '<td style="text-align:center">' + unitCell + '</td>' +
+      '<td>' + (l.rooms ?? '—') + '</td>' +
+      '<td>' + (l.sqm ?? '—') + '</td>' +
+      '<td>' + (l.sqm_build ?? '—') + '</td>' +
+      '<td>₪' + (l.price || 0).toLocaleString() + '</td>' +
+      '<td>' + (l.price_per_sqm ? '₪' + l.price_per_sqm.toLocaleString() : '—') + '</td>' +
+      '</tr>';
+  }).join('');
+  document.getElementById('rows').innerHTML = html || '<tr><td colspan="12" class="muted">אין תוצאות</td></tr>';
   document.querySelectorAll('th.sort').forEach(th => {
     th.classList.toggle('sort-asc', th.dataset.key === sortKey && sortAsc);
     th.classList.toggle('sort-desc', th.dataset.key === sortKey && !sortAsc);
   });
-}
-function escapeHtml(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 document.getElementById('q').addEventListener('input', render);
 document.getElementById('src').addEventListener('change', render);
