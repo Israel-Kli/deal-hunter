@@ -11,7 +11,8 @@
   input, select { background:#fff; color:#1a1a2e; border:1px solid #d1d5db; border-radius:6px; padding:6px 10px; font-size:14px; }
   table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:12px; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.08); }
   th, td { padding:4px 8px; border-bottom:1px solid #e5e7eb; text-align:right; vertical-align:middle; }
-  th.col-addr, td.col-addr { width:10%; max-width:120px; overflow-wrap:anywhere; word-wrap:break-word; }
+  th.col-addr, td.col-addr { width:10%; max-width:120px; }
+  td.col-addr { overflow-wrap:anywhere; word-wrap:break-word; }
   th.col-desc, td.col-desc { width:36%; min-width:0; }
   th { background:#e8ecf1; position:sticky; top:0; }
   tr:hover { background:#f0f4ff; }
@@ -52,10 +53,13 @@
   }
   .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:6px; border:1px solid #d1d5db; background:#fff; color:#2563eb; font-size:14px; cursor:pointer; text-decoration:none; transition:background .15s; }
   .icon-btn:hover { background:#e0e7ff; text-decoration:none; }
-  .icon-btn.maps { color:#1a73e8; }
+  .icon-btn.maps { color:#1a73e8; flex-shrink:0; }
   .icon-btn.maps:hover { background:#d2e3fc; }
-  .unit-flag { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:4px; border:1px solid #22c55e; background:#ecfdf5; color:#15803d; font-size:11px; font-weight:700; }
-  .unit-flag[hidden] { visibility:hidden; }
+  .icon-btn-source { padding:4px; }
+  .icon-btn-source .src-favicon { display:block; width:18px; height:18px; object-fit:contain; }
+  td.col-addr { display:flex; align-items:center; gap:4px; flex-direction:row; }
+  td.col-addr .addr-text { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  mark.desc-hit { background:#fde047; color:#111827; font-weight:700; padding:0 3px; border-radius:3px; }
 </style>
 </head>
 <body>
@@ -89,7 +93,7 @@
   <div class="scoring-info">
     <b>ציון (1–10):</b>
     מחיר מול שוק (חלק חלק) — ₪/מ״ר ביחס לטווח (כולל עסקאות דומות כשזמין) |
-    תיאור — דיור / יחידת דיור / apartment מעלה כשמופיעים (יתרון); גינה או חצר גדולה; חדרים רבים (בתקרה) |
+    תיאור — יחידת דיור / יחידות דיור / מחולק / מחולקת מודגשים בצהוב; גם apartment בציון; גינה או חצר גדולה; חדרים רבים (בתקרה) |
     מתקנים — חניה, מרפסת, שיפוץ |
     מוכר — פרטי עדיף על תיווך |
     מו״מ — ירידת מחיר |
@@ -100,11 +104,10 @@
       <tr>
         <th>ציון</th>
         <th>עיר</th>
+        <th class="col-addr">כתובת</th>
         <th class="sort" data-key="source">מקור</th>
         <th>סוג</th>
-        <th class="col-addr">כתובת</th>
         <th class="col-desc">תיאור</th>
-        <th title="מזוהה בתיאור: דיור / יחידת דיור / apartment — בונוס לציון">דיור?</th>
         <th class="sort" data-key="rooms">חדרים</th>
         <th class="sort" data-key="sqm">מ"ר (פרסום)</th>
         <th class="sort" data-key="sqm_build">מ"ר בנוי</th>
@@ -135,6 +138,16 @@ function scoreClass(s) {
   if (s >= 8) return 's-hot';
   if (s >= 6) return 's-warm';
   return 's-cold';
+}
+function sourceFaviconUrl(source) {
+  const hostBy = { yad2: 'yad2.co.il', madlan: 'madlan.co.il', onmap: 'onmap.co.il', ad: 'ad.co.il' };
+  const host = hostBy[source];
+  if (!host) return '';
+  return 'https://www.google.com/s2/favicons?sz=32&domain=' + host;
+}
+function sourceSiteTitle(source) {
+  const t = { yad2: 'Yad2', madlan: 'Madlan', onmap: 'OnMap', ad: 'ad.co.il' };
+  return t[source] || source || 'מודעה';
 }
 function streetOrMapLink(l) {
   const lat = parseFloat(l.lat);
@@ -289,6 +302,11 @@ function doSort(key) {
 function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+function highlightDescPhrases(escaped) {
+  if (!escaped) return '';
+  const re = /(יחידות דיור|יחידת דיור|מחולקת|מחולק)/g;
+  return escaped.replace(re, '<mark class="desc-hit">$1</mark>');
+}
 function stripCityFromAddress(address, city) {
   if (!address) return '';
   let a = String(address).trim();
@@ -324,23 +342,23 @@ function render() {
       ? '<span class="agent-badge makler" title="תווך/סוכן">תווך</span>'
       : '<span class="agent-badge private" title="מוכר פרטי">פרטי</span>';
     const desc = l.description || '';
-    const descHtml = desc ? '<div class="desc-cell" title="' + escapeHtml(desc) + '">' + escapeHtml(desc) + '</div>' : '';
+    const descHtml = desc
+      ? '<div class="desc-cell" title="' + escapeHtml(desc) + '">' + highlightDescPhrases(escapeHtml(desc)) + '</div>'
+      : '';
     const addrFull = l.address || '';
     const addrShort = stripCityFromAddress(addrFull, l.city || '');
-    const addrTitle = addrFull && addrShort !== addrFull ? escapeHtml(addrFull) : '';
-    const unitHit = !!(l.score_reasons && l.score_reasons.description_unit_hit);
-    const unitCell = unitHit
-      ? '<span class="unit-flag" title="בתיאור המודעה זוהו דיור / יחידת דיור / apartment — נספר כיתרון בציון">✓</span>'
-      : '<span class="unit-flag" hidden aria-hidden="true">·</span>';
+    const fav = sourceFaviconUrl(l.source);
+    const srcImg = fav
+      ? '<img class="src-favicon" src="' + escapeHtml(fav) + '" alt="" width="18" height="18" loading="lazy" referrerpolicy="no-referrer" decoding="async" onerror="this.replaceWith(document.createTextNode(String.fromCharCode(8599)))">'
+      : String.fromCharCode(8599);
     const rb64 = encodeReasonsB64(l.score_reasons || {});
     return '<tr>' +
       '<td><span class="score ' + scoreClass(l.score) + '" data-rb64="' + rb64 + '">' + (l.score ?? '—') + '</span></td>' +
       '<td>' + (l.city || '—') + '</td>' +
-      '<td><a class="icon-btn" href="' + l.url + '" target="_blank" rel="noopener" title="פתח מודעה במקור">🔗</a></td>' +
+      '<td class="col-addr"><a class="icon-btn maps" href="' + escapeHtml(sm.href) + '" target="_blank" rel="noopener" title="' + escapeHtml(sm.title) + '">📍</a><span class="addr-text"' + (addrFull ? ' title="' + escapeHtml(addrFull) + '"' : '') + '>' + (addrShort || '—') + '</span></td>' +
+      '<td><a class="icon-btn icon-btn-source" href="' + escapeHtml(l.url) + '" target="_blank" rel="noopener" title="פתח מודעה ב־' + escapeHtml(sourceSiteTitle(l.source)) + '">' + srcImg + '</a></td>' +
       '<td>' + badge + '</td>' +
-      '<td class="col-addr"><span' + (addrTitle ? ' title="' + addrTitle + '"' : '') + '>' + (addrShort || '—') + '</span> <a class="icon-btn maps" href="' + sm.href + '" target="_blank" rel="noopener" title="' + escapeHtml(sm.title) + '" style="display:inline-flex;vertical-align:middle;margin-right:2px;width:24px;height:24px;font-size:14px;">📍</a></td>' +
       '<td class="col-desc">' + descHtml + '</td>' +
-      '<td style="text-align:center">' + unitCell + '</td>' +
       '<td>' + (l.rooms ?? '—') + '</td>' +
       '<td>' + (l.sqm ?? '—') + '</td>' +
       '<td>' + (l.sqm_build ?? '—') + '</td>' +
@@ -348,7 +366,7 @@ function render() {
       '<td>' + (l.price_per_sqm ? '₪' + l.price_per_sqm.toLocaleString() : '—') + '</td>' +
       '</tr>';
   }).join('');
-  document.getElementById('rows').innerHTML = html || '<tr><td colspan="12" class="muted">אין תוצאות</td></tr>';
+  document.getElementById('rows').innerHTML = html || '<tr><td colspan="11" class="muted">אין תוצאות</td></tr>';
   document.querySelectorAll('th.sort').forEach(th => {
     th.classList.toggle('sort-asc', th.dataset.key === sortKey && sortAsc);
     th.classList.toggle('sort-desc', th.dataset.key === sortKey && !sortAsc);
