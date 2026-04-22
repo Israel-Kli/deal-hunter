@@ -87,7 +87,55 @@ def _make_handler(cfg: Config):
                 self.path = "/dashboard.html"
             return super().do_GET()
 
+        def _write_json(self, status: int, payload: dict) -> None:
+            body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         def do_POST(self):
+            if self.path == "/api/listing/user":
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                except ValueError:
+                    length = 0
+                raw = self.rfile.read(length) if length > 0 else b"{}"
+                try:
+                    data = json.loads(raw.decode("utf-8"))
+                except json.JSONDecodeError:
+                    self._write_json(400, {"status": "error", "error": "Invalid JSON"})
+                    return
+                source = data.get("source")
+                source_id = data.get("source_id")
+                if not source or not source_id:
+                    self._write_json(400, {"status": "error", "error": "source and source_id required"})
+                    return
+                fav = data.get("is_favorite")
+                notes = data.get("user_notes")
+                if fav is None and notes is None:
+                    self._write_json(400, {"status": "error", "error": "is_favorite and/or user_notes required"})
+                    return
+                is_f = None
+                if fav is not None:
+                    is_f = bool(fav)
+                notes_s = None
+                if notes is not None:
+                    if not isinstance(notes, str):
+                        self._write_json(400, {"status": "error", "error": "user_notes must be a string"})
+                        return
+                    notes_s = notes[:2000]
+                with ListingsRepo(db_path) as repo:
+                    ok = repo.update_user_fields(
+                        str(source), str(source_id), is_favorite=is_f, user_notes=notes_s
+                    )
+                if not ok:
+                    self._write_json(404, {"status": "error", "error": "Listing not found"})
+                    return
+                self._write_json(200, {"status": "ok", "ok": True})
+                return
             if self.path == "/api/reset":
                 with ListingsRepo(db_path) as repo:
                     deleted = repo.reset_all()

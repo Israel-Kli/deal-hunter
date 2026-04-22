@@ -302,13 +302,21 @@ def _has_next_page(data: dict[str, Any]) -> bool:
 
 
 def _publish_date_from_images(images: list[str]) -> datetime | None:
-    for img in images[:3]:
-        m = re.search(r"/Pic/(\d{4})(\d{2})/(\d{2})/", img)
-        if m:
-            try:
-                return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-            except ValueError:
-                continue
+    """Best-effort date from Yad2 CDN image paths (layout varies by CDN version)."""
+    patterns = (
+        r"/Pic/(\d{4})(\d{2})/(\d{2})/",  # /Pic/202604/03/…
+        r"/Pic/(\d{4})/(\d{2})/(\d{2})/",  # /Pic/2026/04/03/…
+    )
+    for img in images[:5]:
+        if not isinstance(img, str):
+            continue
+        for pat in patterns:
+            m = re.search(pat, img)
+            if m:
+                try:
+                    return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+                except ValueError:
+                    break
     return None
 
 

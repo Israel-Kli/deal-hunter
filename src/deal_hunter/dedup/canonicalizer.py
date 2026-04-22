@@ -223,7 +223,7 @@ def load_existing_groups(conn) -> dict[str, CanonicalGroup]:
         "ac, mamad, renovated, description, images_json, tags_json, lat, lon, "
         "publish_date, first_listed_date, first_seen_at, last_seen_at, canonical_id, "
         "fair_price_estimate, fair_price_low, fair_price_high, score, "
-        "score_reasons, source_payload "
+        "score_reasons, source_payload, is_favorite, user_notes "
         "FROM listings WHERE canonical_id IS NOT NULL"
     ).fetchall()
 
@@ -269,6 +269,8 @@ def load_existing_groups(conn) -> dict[str, CanonicalGroup]:
             score=r["score"],
             score_reasons=json.loads(r["score_reasons"] or "{}"),
             source_payload=json.loads(r["source_payload"] or "{}"),
+            is_favorite=bool(r["is_favorite"]),
+            user_notes=r["user_notes"] or "",
         )
         cid = listing.canonical_id
         if cid not in groups:
