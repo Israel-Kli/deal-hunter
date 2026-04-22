@@ -1,9 +1,9 @@
 """Heuristic investment scorer.
 
-Components: smooth price-vs-market, description-based multi-unit signal,
-garden + room-count bonus (capped), amenities (no elevator), seller channel
-(private vs agent), price-drop ramp, risk (no mamad, liquidity).
-Output: score in [1, 10] and a reasons dict.
+Components: smooth price-vs-market, description-based multi-unit bonus,
+garden + room-count bonus (capped), amenities (parking, balcony, renovated),
+seller channel (private vs agent), price-drop ramp, liquidity risk on very
+high price. Output: score in [1, 10] and a reasons dict.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import Any
 from deal_hunter.models import Listing
 from deal_hunter.scoring.description_signals import (
     combined_search_text,
-    multi_unit_penalty_and_matches,
+    multi_unit_bonus_and_matches,
     outdoor_and_rooms_bonus,
 )
 
@@ -94,12 +94,12 @@ def score_listing(listing: Listing) -> tuple[float, dict[str, Any]]:
         reasons["price_vs_market_delta"] = round(delta, 2)
 
     text = combined_search_text(listing)
-    unit_pen, unit_matches = multi_unit_penalty_and_matches(text)
-    if unit_pen < 0:
-        score += unit_pen
+    unit_bon, unit_matches = multi_unit_bonus_and_matches(text)
+    if unit_bon > 0:
+        score += unit_bon
         reasons["description_unit_hit"] = True
         reasons["matched_unit_phrases"] = unit_matches
-        reasons["description_unit_adjustment"] = round(unit_pen, 2)
+        reasons["description_unit_adjustment"] = round(unit_bon, 2)
     else:
         reasons["description_unit_hit"] = False
 
@@ -113,8 +113,6 @@ def score_listing(listing: Listing) -> tuple[float, dict[str, Any]]:
         amen += 0.5
     if listing.balcony:
         amen += 0.3
-    if listing.mamad:
-        amen += 0.4
     if listing.renovated:
         amen += 0.6
     if listing.floor == 0:
@@ -141,12 +139,6 @@ def score_listing(listing: Listing) -> tuple[float, dict[str, Any]]:
         reasons["price_drop_bonus"] = round(drop_bonus, 2)
         score += drop_bonus
 
-    is_house = any(
-        t in listing.listing_type for t in ("בית פרטי", "קוטג'", "דו משפחתי", "בית")
-    )
-    if not is_house and not listing.mamad:
-        score -= 0.3
-        reasons["risk_no_mamad"] = True
     if price and price > 5_000_000:
         score -= 0.3
         reasons["risk_liquidity"] = True

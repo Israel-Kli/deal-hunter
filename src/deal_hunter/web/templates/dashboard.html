@@ -9,8 +9,10 @@
   h1 { margin:0 0 16px; font-size:20px; }
   .bar { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
   input, select { background:#fff; color:#1a1a2e; border:1px solid #d1d5db; border-radius:6px; padding:6px 10px; font-size:14px; }
-  table { width:100%; border-collapse:collapse; font-size:12px; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:12px; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.08); }
   th, td { padding:4px 8px; border-bottom:1px solid #e5e7eb; text-align:right; vertical-align:middle; }
+  th.col-addr, td.col-addr { width:10%; max-width:120px; overflow-wrap:anywhere; word-wrap:break-word; }
+  th.col-desc, td.col-desc { width:36%; min-width:0; }
   th { background:#e8ecf1; position:sticky; top:0; }
   tr:hover { background:#f0f4ff; }
   .score { display:inline-block; min-width:34px; padding:2px 6px; border-radius:6px; text-align:center; font-weight:600; font-size:12px; cursor:pointer; }
@@ -36,8 +38,18 @@
   .agent-badge { display:inline-block; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:600; }
   .agent-badge.makler { background:#f59e0b; color:#fff; }
   .agent-badge.private { background:#22c55e; color:#fff; }
-  .desc-cell { max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:help; font-size:11px; color:#6b7280; }
-  .desc-cell:hover { white-space:normal; word-break:break-word; }
+  .desc-cell {
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+    word-break:break-word;
+    line-height:1.35;
+    max-height:2.7em;
+    cursor:help;
+    font-size:11px;
+    color:#6b7280;
+  }
   .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:6px; border:1px solid #d1d5db; background:#fff; color:#2563eb; font-size:14px; cursor:pointer; text-decoration:none; transition:background .15s; }
   .icon-btn:hover { background:#e0e7ff; text-decoration:none; }
   .icon-btn.maps { color:#1a73e8; }
@@ -77,11 +89,11 @@
   <div class="scoring-info">
     <b>ציון (1–10):</b>
     מחיר מול שוק (חלק חלק) — ₪/מ״ר ביחס לטווח (כולל עסקאות דומות כשזמין) |
-    תיאור — דיור/יחידת דיור/apartment מוריד; גינה/חצר גדולה +מעלה; חדרים רבים +מעלה (בתקרה) |
-    מתקנים — חניה, מרפסת, ממ״ד, שיפוץ (ללא מעלית) |
+    תיאור — דיור / יחידת דיור / apartment מעלה כשמופיעים (יתרון); גינה או חצר גדולה; חדרים רבים (בתקרה) |
+    מתקנים — חניה, מרפסת, שיפוץ |
     מוכר — פרטי עדיף על תיווך |
     מו״מ — ירידת מחיר |
-    סיכון — ללא ממ״ד (לא בית), מחיר גבוה
+    סיכון — מחיר גבוה מאוד (נזילות)
   </div>
   <table>
     <thead>
@@ -90,9 +102,9 @@
         <th>עיר</th>
         <th class="sort" data-key="source">מקור</th>
         <th>סוג</th>
-        <th>כתובת</th>
-        <th>תיאור</th>
-        <th title="מזוהה בתיאור: דיור / יחידת דיור / apartment">דיור?</th>
+        <th class="col-addr">כתובת</th>
+        <th class="col-desc">תיאור</th>
+        <th title="מזוהה בתיאור: דיור / יחידת דיור / apartment — בונוס לציון">דיור?</th>
         <th class="sort" data-key="rooms">חדרים</th>
         <th class="sort" data-key="sqm">מ"ר (פרסום)</th>
         <th class="sort" data-key="sqm_build">מ"ר בנוי</th>
@@ -149,13 +161,12 @@ function fmtScoreReasons(reasons) {
     seller_adjustment: 'התאמת מוכר',
     price_drop_pct: 'ירידת מחיר',
     price_drop_bonus: 'בונוס ירידת מחיר',
-    risk_no_mamad: 'סיכון: ללא ממ"ד',
     risk_liquidity: 'סיכון: נזילות',
     market_band: 'טווח שוק',
     market_band_source: 'מקור טווח שוק',
-    description_unit_hit: 'איתות דיור בתיאור',
+    description_unit_hit: 'דיור בתיאור (בונוס)',
     matched_unit_phrases: 'ביטויים שזוהו',
-    description_unit_adjustment: 'התאמת תיאור (דיור)',
+    description_unit_adjustment: 'בונוס תיאור (דיור)',
     garden_bonus: 'בונוס גינה/חצר',
     room_layout_bonus: 'בונוס חדרים',
     outdoor_rooms_bonus: 'סה״כ גינה+חדרים',
@@ -174,7 +185,7 @@ function fmtScoreReasons(reasons) {
     'above band': 'מעל הטווח',
     'much above band': 'הרבה מעל הטווח',
   };
-  const priority = ['market_band','market_band_source','price_vs_market_delta','price_vs_market','description_unit_hit','matched_unit_phrases','description_unit_adjustment','garden_bonus','room_layout_bonus','outdoor_rooms_bonus','matched_garden_phrases','amenity_bonus','seller_channel','seller_adjustment','price_drop_pct','price_drop_bonus','risk_no_mamad','risk_liquidity'];
+  const priority = ['market_band','market_band_source','price_vs_market_delta','price_vs_market','description_unit_hit','matched_unit_phrases','description_unit_adjustment','garden_bonus','room_layout_bonus','outdoor_rooms_bonus','matched_garden_phrases','amenity_bonus','seller_channel','seller_adjustment','price_drop_pct','price_drop_bonus','risk_liquidity'];
   const entries = Object.entries(reasons).filter(([k]) => k !== 'final');
   entries.sort((a, b) => {
     const ia = priority.indexOf(a[0]);
@@ -278,6 +289,17 @@ function doSort(key) {
 function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+function stripCityFromAddress(address, city) {
+  if (!address) return '';
+  let a = String(address).trim();
+  const c = String(city || '').trim();
+  if (!c) return a;
+  if (a === c) return '—';
+  const esc = c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp('(?:\\s*,\\s*)' + esc + '\\s*$|^' + esc + '\\s*,\\s*|^' + esc + '$', '');
+  let out = a.replace(re, '').trim().replace(/,\s*$/, '').trim();
+  return out || a;
+}
 function render() {
   const q = document.getElementById('q').value.trim();
   const src = document.getElementById('src').value;
@@ -302,11 +324,13 @@ function render() {
       ? '<span class="agent-badge makler" title="תווך/סוכן">תווך</span>'
       : '<span class="agent-badge private" title="מוכר פרטי">פרטי</span>';
     const desc = l.description || '';
-    const truncated = desc.length > 80 ? desc.substring(0, 80) + '...' : desc;
-    const descHtml = desc ? '<div class="desc-cell" title="' + escapeHtml(desc) + '">' + escapeHtml(truncated) + '</div>' : '';
+    const descHtml = desc ? '<div class="desc-cell" title="' + escapeHtml(desc) + '">' + escapeHtml(desc) + '</div>' : '';
+    const addrFull = l.address || '';
+    const addrShort = stripCityFromAddress(addrFull, l.city || '');
+    const addrTitle = addrFull && addrShort !== addrFull ? escapeHtml(addrFull) : '';
     const unitHit = !!(l.score_reasons && l.score_reasons.description_unit_hit);
     const unitCell = unitHit
-      ? '<span class="unit-flag" title="בתיאור המודעה זוהו מילים כמו דיור / יחידת דיור / apartment — עשוי להצביע על יחידת דיור ולא רק בית פרטי">✓</span>'
+      ? '<span class="unit-flag" title="בתיאור המודעה זוהו דיור / יחידת דיור / apartment — נספר כיתרון בציון">✓</span>'
       : '<span class="unit-flag" hidden aria-hidden="true">·</span>';
     const rb64 = encodeReasonsB64(l.score_reasons || {});
     return '<tr>' +
@@ -314,8 +338,8 @@ function render() {
       '<td>' + (l.city || '—') + '</td>' +
       '<td><a class="icon-btn" href="' + l.url + '" target="_blank" rel="noopener" title="פתח מודעה במקור">🔗</a></td>' +
       '<td>' + badge + '</td>' +
-      '<td>' + (l.address || '—') + ' <a class="icon-btn maps" href="' + sm.href + '" target="_blank" rel="noopener" title="' + escapeHtml(sm.title) + '" style="display:inline-flex;vertical-align:middle;margin-right:4px;width:24px;height:24px;font-size:14px;">📍</a></td>' +
-      '<td>' + descHtml + '</td>' +
+      '<td class="col-addr"><span' + (addrTitle ? ' title="' + addrTitle + '"' : '') + '>' + (addrShort || '—') + '</span> <a class="icon-btn maps" href="' + sm.href + '" target="_blank" rel="noopener" title="' + escapeHtml(sm.title) + '" style="display:inline-flex;vertical-align:middle;margin-right:2px;width:24px;height:24px;font-size:14px;">📍</a></td>' +
+      '<td class="col-desc">' + descHtml + '</td>' +
       '<td style="text-align:center">' + unitCell + '</td>' +
       '<td>' + (l.rooms ?? '—') + '</td>' +
       '<td>' + (l.sqm ?? '—') + '</td>' +

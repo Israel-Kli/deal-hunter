@@ -28,27 +28,27 @@ _GARDEN_MARKERS = (
 )
 
 
-def multi_unit_penalty_and_matches(text: str) -> tuple[float, list[str]]:
-    """Negative adjustment (capped) when text suggests apartment / דיור units."""
+def multi_unit_bonus_and_matches(text: str) -> tuple[float, list[str]]:
+    """Positive adjustment (capped) when text mentions apartment / דיור (pro for this product)."""
     matched: list[str] = []
-    penalty = 0.0
+    bonus = 0.0
     t = text
     for ph in _MULTI_UNIT_STRONG:
         if ph in t:
             matched.append(ph)
-            penalty += 0.45
+            bonus += 0.45
     if "apartment" in t:
         if "apartment" not in matched:
             matched.append("apartment")
-        penalty += 0.35
+        bonus += 0.35
     if "יחידת" in t and "יחידת דיור" not in t:
         matched.append("יחידת")
-        penalty += 0.22
+        bonus += 0.22
     if "דיור" in t and "יחידות דיור" not in t and "יחידת דיור" not in t:
         matched.append("דיור")
-        penalty += 0.18
+        bonus += 0.18
     cap = 1.0
-    return -min(cap, penalty), matched
+    return min(cap, bonus), matched
 
 
 def garden_bonus_and_matches(text: str) -> tuple[float, list[str]]:
