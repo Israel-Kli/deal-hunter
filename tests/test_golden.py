@@ -63,7 +63,7 @@ def test_yad2_feed_parse_returns_listings():
     assert items, "fixture must contain at least one raw item"
 
     listings = [adapter._parse(raw, CITY) for raw in items]
-    parsed = [l for l in listings if l is not None]
+    parsed = [listing for listing, _reason in listings if listing is not None]
     assert parsed, "at least one raw item must survive the filter"
 
     first = parsed[0]

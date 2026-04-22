@@ -10,15 +10,25 @@
   .bar { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
   input, select { background:#fff; color:#1a1a2e; border:1px solid #d1d5db; border-radius:6px; padding:6px 10px; font-size:14px; }
   table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:12px; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.08); }
-  th, td { padding:4px 8px; border-bottom:1px solid #e5e7eb; text-align:right; vertical-align:middle; }
-  th.col-addr, td.col-addr { width:16%; min-width:140px; max-width:240px; }
+  th, td { padding:4px 6px; border-bottom:1px solid #e5e7eb; text-align:right; vertical-align:middle; }
+  th.col-score, td.col-score { width:2.75rem; max-width:2.85rem; padding:4px 3px; text-align:center; }
+  th.col-city, td.col-city { width:4.5rem; max-width:5.5rem; padding:4px 4px; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:middle; }
+  th.col-addr, td.col-addr { width:10%; min-width:88px; max-width:150px; }
   td.col-addr { overflow-wrap:anywhere; word-wrap:break-word; }
-  .addr-wrap { display:flex; align-items:center; gap:4px; min-width:0; width:100%; }
-  .addr-wrap .addr-text { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  th.col-desc, td.col-desc { width:36%; min-width:0; }
+  .addr-wrap { min-width:0; width:100%; }
+  .addr-link { display:block; min-width:0; max-width:100%; color:#2563eb; text-decoration:none; font-size:11px; }
+  .addr-link:hover { text-decoration:underline; }
+  .addr-link .addr-text { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  th.col-src, td.col-src { width:2.5rem; max-width:2.6rem; padding:4px 2px; text-align:center; }
+  th.col-date, td.col-date { width:5.25rem; max-width:5.5rem; padding:4px 3px; font-size:11px; white-space:nowrap; }
+  th.col-type, td.col-type { width:3.1rem; max-width:3.4rem; padding:4px 2px; text-align:center; }
+  th.col-desc, td.col-desc { width:44%; min-width:160px; }
+  th.col-num, td.col-num { width:3rem; max-width:3.25rem; padding:4px 3px; text-align:center; font-size:11px; font-variant-numeric: tabular-nums; white-space:nowrap; }
+  th.col-price, td.col-price { width:5.25rem; max-width:5.5rem; padding:4px 4px; font-size:11px; font-variant-numeric: tabular-nums; white-space:nowrap; }
+  th.col-ppsqm, td.col-ppsqm { width:4rem; max-width:4.25rem; padding:4px 3px; font-size:11px; font-variant-numeric: tabular-nums; white-space:nowrap; }
   th { background:#e8ecf1; position:sticky; top:0; }
   tr:hover { background:#f0f4ff; }
-  .score { display:inline-block; min-width:34px; padding:2px 6px; border-radius:6px; text-align:center; font-weight:600; font-size:12px; cursor:pointer; }
+  .score { display:inline-block; min-width:26px; padding:1px 4px; border-radius:5px; text-align:center; font-weight:600; font-size:11px; cursor:pointer; }
   .s-hot   { background:#22c55e; color:#fff; }
   .s-warm  { background:#f59e0b; color:#fff; }
   .s-cold  { background:#9ca3af; color:#fff; }
@@ -43,20 +53,18 @@
   .agent-badge.private { background:#22c55e; color:#fff; }
   .desc-cell {
     display:-webkit-box;
-    -webkit-line-clamp:2;
+    -webkit-line-clamp:4;
     -webkit-box-orient:vertical;
     overflow:hidden;
     word-break:break-word;
     line-height:1.35;
-    max-height:2.7em;
+    max-height:5.5em;
     cursor:help;
-    font-size:11px;
-    color:#6b7280;
+    font-size:12px;
+    color:#4b5563;
   }
   .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:6px; border:1px solid #d1d5db; background:#fff; color:#2563eb; font-size:14px; cursor:pointer; text-decoration:none; transition:background .15s; }
   .icon-btn:hover { background:#e0e7ff; text-decoration:none; }
-  .addr-wrap .icon-btn.maps { color:#1a73e8; flex-shrink:0; }
-  .icon-btn.maps:hover { background:#d2e3fc; }
   .icon-btn-source { padding:4px; }
   .icon-btn-source .src-favicon { display:block; width:18px; height:18px; object-fit:contain; }
   mark.desc-hit { background:#fde047; color:#111827; font-weight:700; padding:0 3px; border-radius:3px; }
@@ -84,7 +92,7 @@
     <select id="agentType">
       <option value="">הכל</option>
       <option value="private">פרטי בלבד</option>
-      <option value="agent">מקרלר בלבד</option>
+      <option value="agent">מתווך בלבד</option>
     </select>
     <button type="button" class="btn btn-refresh" onclick="load()">רענן</button>
     <button type="button" id="scanBtn" class="btn btn-scan" onclick="triggerScan()">🔍 סריקה ידנית</button>
@@ -93,7 +101,7 @@
   <div class="scoring-info">
     <b>ציון (1–10):</b>
     מחיר מול שוק (חלק חלק) — ₪/מ״ר ביחס לטווח (כולל עסקאות דומות כשזמין) |
-    תיאור — יחידת דיור / יחידות דיור / מחולק / מחולקת / apartment מודגשים בצהוב ומעלים ציון (בלבד); גינה או חצר גדולה; חדרים רבים (בתקרה) |
+    תיאור — יחידות דיור / יחידת דיור / יחידות או יחידה (מילה בפני עצמה) / מחולק / מחולקת / apartment מודגשים בצהוב ומעלים ציון (בלבד); גינה או חצר גדולה; חדרים רבים (בתקרה) |
     מתקנים — חניה, מרפסת, שיפוץ |
     מוכר — פרטי עדיף על תיווך |
     מו״מ — ירידת מחיר |
@@ -102,17 +110,18 @@
   <table>
     <thead>
       <tr>
-        <th>ציון</th>
-        <th>עיר</th>
+        <th class="col-score">ציון</th>
+        <th class="col-city">עיר</th>
         <th class="col-addr">כתובת</th>
-        <th class="sort" data-key="source">מקור</th>
-        <th>סוג</th>
+        <th class="col-src sort" data-key="source">מקור</th>
+        <th class="col-date sort" data-key="first_listed_date">תאריך עלייה ראשונה</th>
+        <th class="col-type">סוג</th>
         <th class="col-desc">תיאור</th>
-        <th class="sort" data-key="rooms">חדרים</th>
-        <th class="sort" data-key="sqm">מ"ר (פרסום)</th>
-        <th class="sort" data-key="sqm_build">מ"ר בנוי</th>
-        <th class="sort" data-key="price">מחיר</th>
-        <th class="sort" data-key="price_per_sqm">₪/מ"ר</th>
+        <th class="col-num sort" data-key="rooms">חדרים</th>
+        <th class="col-num sort" data-key="sqm">מ"ר (פרסום)</th>
+        <th class="col-num sort" data-key="sqm_build">מ"ר בנוי</th>
+        <th class="col-price sort" data-key="price">מחיר</th>
+        <th class="col-ppsqm sort" data-key="price_per_sqm">₪/מ"ר</th>
       </tr>
     </thead>
     <tbody id="rows"></tbody>
@@ -189,7 +198,7 @@ function fmtScoreReasons(reasons) {
   const labels = {
     comps: 'עסקאות סגורות',
     market_refs: 'התייחסות שוק',
-    agent: 'תיווך',
+    agent: 'מתווך',
     private: 'פרטי',
     'exceptional (>15% below band)': 'מצוין (>15% מתחת לטווח)',
     'below band': 'מתחת לטווח',
@@ -304,7 +313,11 @@ function escapeHtml(s) {
 }
 function highlightDescPhrases(escaped) {
   if (!escaped) return '';
-  const re = /(יחידות דיור|יחידת דיור|מחולקת|מחולק|apartment)/gi;
+  const heb = '[\\u0590-\\u05FF]';
+  const re = new RegExp(
+    '(יחידות דיור|יחידת דיור|מחולקת|מחולק|(?<!' + heb + ')יחידות(?!' + heb + ')|(?<!' + heb + ')יחידה(?!' + heb + ')|apartment)',
+    'gi'
+  );
   return escaped.replace(re, '<mark class="desc-hit">$1</mark>');
 }
 function stripCityFromAddress(address, city) {
@@ -332,6 +345,12 @@ function render() {
     return true;
   });
   rows.sort((a, b) => {
+    if (sortKey === 'first_listed_date') {
+      const av = (a.first_listed_date || '').trim() || '0000-00-00';
+      const bv = (b.first_listed_date || '').trim() || '0000-00-00';
+      const c = av.localeCompare(bv);
+      return sortAsc ? c : -c;
+    }
     const av = a[sortKey] ?? 0;
     const bv = b[sortKey] ?? 0;
     return sortAsc ? av - bv : bv - av;
@@ -339,7 +358,7 @@ function render() {
   const html = rows.map(l => {
     const sm = streetOrMapLink(l);
     const badge = l.is_agent
-      ? '<span class="agent-badge makler" title="תווך/סוכן">תווך</span>'
+      ? '<span class="agent-badge makler" title="מודעה דרך מתווך">מתווך</span>'
       : '<span class="agent-badge private" title="מוכר פרטי">פרטי</span>';
     const desc = l.description || '';
     const descHtml = desc
@@ -353,20 +372,21 @@ function render() {
       : String.fromCharCode(8599);
     const rb64 = encodeReasonsB64(l.score_reasons || {});
     return '<tr>' +
-      '<td><span class="score ' + scoreClass(l.score) + '" data-rb64="' + rb64 + '">' + (l.score ?? '—') + '</span></td>' +
-      '<td>' + (l.city || '—') + '</td>' +
-      '<td class="col-addr"><div class="addr-wrap"><a class="icon-btn maps" href="' + escapeHtml(sm.href) + '" target="_blank" rel="noopener" title="' + escapeHtml(sm.title) + '">📍</a><span class="addr-text"' + (addrFull ? ' title="' + escapeHtml(addrFull) + '"' : '') + '>' + (addrShort || '—') + '</span></div></td>' +
-      '<td><a class="icon-btn icon-btn-source" href="' + escapeHtml(l.url) + '" target="_blank" rel="noopener" title="פתח מודעה ב־' + escapeHtml(sourceSiteTitle(l.source)) + '">' + srcImg + '</a></td>' +
-      '<td>' + badge + '</td>' +
+      '<td class="col-score"><span class="score ' + scoreClass(l.score) + '" data-rb64="' + rb64 + '">' + (l.score ?? '—') + '</span></td>' +
+      '<td class="col-city" title="' + escapeHtml(l.city || '') + '">' + (l.city || '—') + '</td>' +
+      '<td class="col-addr"><div class="addr-wrap"><a class="addr-link" href="' + escapeHtml(sm.href) + '" target="_blank" rel="noopener" title="' + escapeHtml(sm.title) + '"><span class="addr-text"' + (addrFull ? ' title="' + escapeHtml(addrFull) + '"' : '') + '>' + escapeHtml(addrShort || '—') + '</span></a></div></td>' +
+      '<td class="col-src"><a class="icon-btn icon-btn-source" href="' + escapeHtml(l.url) + '" target="_blank" rel="noopener" title="פתח מודעה ב־' + escapeHtml(sourceSiteTitle(l.source)) + '">' + srcImg + '</a></td>' +
+      '<td class="col-date">' + (l.first_listed_date ? escapeHtml(l.first_listed_date) : '—') + '</td>' +
+      '<td class="col-type">' + badge + '</td>' +
       '<td class="col-desc">' + descHtml + '</td>' +
-      '<td>' + (l.rooms ?? '—') + '</td>' +
-      '<td>' + (l.sqm ?? '—') + '</td>' +
-      '<td>' + (l.sqm_build ?? '—') + '</td>' +
-      '<td>₪' + (l.price || 0).toLocaleString() + '</td>' +
-      '<td>' + (l.price_per_sqm ? '₪' + l.price_per_sqm.toLocaleString() : '—') + '</td>' +
+      '<td class="col-num">' + (l.rooms ?? '—') + '</td>' +
+      '<td class="col-num">' + (l.sqm ?? '—') + '</td>' +
+      '<td class="col-num">' + (l.sqm_build ?? '—') + '</td>' +
+      '<td class="col-price">₪' + (l.price || 0).toLocaleString() + '</td>' +
+      '<td class="col-ppsqm">' + (l.price_per_sqm ? '₪' + l.price_per_sqm.toLocaleString() : '—') + '</td>' +
       '</tr>';
   }).join('');
-  document.getElementById('rows').innerHTML = html || '<tr><td colspan="11" class="muted">אין תוצאות</td></tr>';
+  document.getElementById('rows').innerHTML = html || '<tr><td colspan="12" class="muted">אין תוצאות</td></tr>';
   document.querySelectorAll('th.sort').forEach(th => {
     th.classList.toggle('sort-asc', th.dataset.key === sortKey && sortAsc);
     th.classList.toggle('sort-desc', th.dataset.key === sortKey && !sortAsc);

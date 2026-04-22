@@ -2,8 +2,22 @@
 
 from __future__ import annotations
 
+import re
+
 from deal_hunter.models import Listing
 from deal_hunter.normalize.hebrew import strip_niqqud
+
+_HEB_CHAR = re.compile(r"[\u0590-\u05FF]")
+
+
+def _standalone_word(text: str, word: str) -> bool:
+    """True if ``word`` appears at least once with no Hebrew letter immediately before/after."""
+    for m in re.finditer(re.escape(word), text):
+        before = text[m.start() - 1] if m.start() > 0 else " "
+        after = text[m.end()] if m.end() < len(text) else " "
+        if not _HEB_CHAR.match(before) and not _HEB_CHAR.match(after):
+            return True
+    return False
 
 
 def combined_search_text(listing: Listing) -> str:
@@ -28,7 +42,7 @@ _GARDEN_MARKERS = (
 
 
 def multi_unit_bonus_and_matches(text: str) -> tuple[float, list[str]]:
-    """Positive adjustment (capped) only for explicit phrases (same set as dashboard highlights)."""
+    """Positive adjustment (capped): phrases + standalone יחידות/יחידה (same rules as dashboard highlights)."""
     matched: list[str] = []
     bonus = 0.0
     t = text
@@ -47,6 +61,12 @@ def multi_unit_bonus_and_matches(text: str) -> tuple[float, list[str]]:
     if "apartment" in t:
         matched.append("apartment")
         bonus += 0.28
+    if "יחידות דיור" not in t and _standalone_word(t, "יחידות"):
+        matched.append("יחידות")
+        bonus += 0.22
+    if "יחידת דיור" not in t and _standalone_word(t, "יחידה"):
+        matched.append("יחידה")
+        bonus += 0.22
     cap = 1.0
     return min(cap, bonus), matched
 

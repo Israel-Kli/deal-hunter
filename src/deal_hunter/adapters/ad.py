@@ -36,8 +36,10 @@ from urllib.parse import urlencode
 from bs4 import BeautifulSoup, Tag
 
 from deal_hunter.adapters.base import SearchFilters
+from deal_hunter.dates import earliest_yyyy_mm_dd, parse_dd_mm_yyyy
 from deal_hunter.http_client import fetch
 from deal_hunter.models import Listing
+from deal_hunter.normalize.israeli_cities import hebrew_allowed_city_keys, hebrew_city_match_key
 
 log = logging.getLogger(__name__)
 
@@ -68,6 +70,8 @@ AGENCY_KEYWORDS = [
     "רימקס", "RE/MAX", "קולדוול", "century", "סנצ'ורי",
 ]
 
+_AD_CREATION_DATE_RE = re.compile(r"תאריך\s*יצירה\s*:\s*(\d{1,2}/\d{1,2}/\d{4})")
+
 
 class AdAdapter:
     source = "ad"
@@ -89,7 +93,10 @@ class AdAdapter:
         self.max_pages = max_pages
         self.request_delay = request_delay_sec
         self.enrich_details = enrich_details
-        self.allowed_cities = set(allowed_cities) if allowed_cities else None
+        if allowed_cities:
+            self._allowed_city_keys = hebrew_allowed_city_keys(list(allowed_cities))
+        else:
+            self._allowed_city_keys = None
 
     # ---- public ScraperAdapter surface ---------------------------------
 
@@ -173,16 +180,35 @@ class AdAdapter:
         return f"{WEB_BASE}{path}{sep}{urlencode({'pageindex': page})}"
 
     def _parse_card(self, card: Tag) -> Listing | None:
-        a = card.find("a", href=re.compile(r"^/ad/\d+"))
-        if not isinstance(a, Tag):
-            return None
-        href = a["href"]
-        m = re.search(r"/ad/(\d+)", href if isinstance(href, str) else "")
-        if not m:
-            return None
-        source_id = m.group(1)
+        block = card.find_parent("div", class_=re.compile(r"\bcard-block\b"))
+        block_id: str | None = None
+        if isinstance(block, Tag):
+            raw_id = block.get("data-id")
+            if raw_id is not None and str(raw_id).isdigit():
+                block_id = str(raw_id)
 
-        title_el = a.find("h2", class_="card-title")
+        a = card.find("a", href=re.compile(r"/ad/\d+"))
+        href = ""
+        source_id: str | None = None
+        if isinstance(a, Tag):
+            href_raw = a.get("href")
+            href = href_raw if isinstance(href_raw, str) else ""
+            m = re.search(r"/ad/(\d+)", href)
+            if m:
+                source_id = m.group(1)
+        if not source_id and block_id:
+            source_id = block_id
+            href = f"/ad/{source_id}"
+        if not source_id:
+            return None
+
+        title_el: Tag | None = None
+        if isinstance(a, Tag):
+            title_el = a.find("h2", class_="card-title")
+        if not isinstance(title_el, Tag):
+            title_el = card.find("h2", class_="card-title")
+        if not isinstance(title_el, Tag):
+            return None
         title = _text(title_el)
         city, neighborhood = _split_city_title(title)
 
@@ -220,7 +246,12 @@ class AdAdapter:
         if "מקודם" in card.get_text():
             tags.append("promoted")
 
-        url = f"{WEB_BASE}{href}" if isinstance(href, str) else WEB_BASE
+        if isinstance(href, str) and href.startswith("http"):
+            url = href
+        elif isinstance(href, str) and href.startswith("/"):
+            url = f"{WEB_BASE}{href}"
+        else:
+            url = f"{WEB_BASE}/ad/{source_id}"
 
         return Listing(
             source="ad",
@@ -239,12 +270,13 @@ class AdAdapter:
             listing_type="apartment",
             images=images,
             tags=tags,
+            first_listed_date="",
             source_payload={"_path": "feed"},
         )
 
     def _passes_filters(self, listing: Listing) -> str | None:
         s = self.search
-        if self.allowed_cities and listing.city not in self.allowed_cities:
+        if self._allowed_city_keys is not None and hebrew_city_match_key(listing.city) not in self._allowed_city_keys:
             return "city_not_allowed"
         if listing.price < s.get("price_min", 0) or listing.price > s.get("price_max", 10**12):
             return "price_out_of_range"
@@ -410,3 +442,12 @@ def _apply_detail_enrichment(listing: Listing, soup: BeautifulSoup) -> None:
         txt = contact.get_text(" ", strip=True)
         if any(kw in txt for kw in AGENCY_KEYWORDS):
             listing.is_agent = True
+
+    m = _AD_CREATION_DATE_RE.search(soup.get_text(" ", strip=True) or "")
+    if m:
+        d = parse_dd_mm_yyyy(m.group(1))
+        if d:
+            listing.first_listed_date = earliest_yyyy_mm_dd(
+                listing.first_listed_date,
+                d.isoformat(),
+            )

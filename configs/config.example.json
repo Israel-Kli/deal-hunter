@@ -13,6 +13,8 @@
       "name": "Tel Aviv",
       "city_code": "5000",
       "slug": "tel-aviv-area",
+      "onmap_slug": "tel-aviv-yafo",
+      "hebrew_name": "תל אביב יפו",
       "filter_areas": false,
       "area_keywords": []
     },
@@ -20,6 +22,8 @@
       "name": "Ramat Gan",
       "city_code": "8600",
       "slug": "tel-aviv-area",
+      "onmap_slug": "ramat-gan",
+      "hebrew_name": "רמת גן",
       "filter_areas": false,
       "area_keywords": []
     }

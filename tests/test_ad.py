@@ -118,7 +118,7 @@ def test_filters_applied_in_feed_iteration():
     kept: list[Listing] = []
     for card in soup.select("div.card.overflow-hidden"):
         l = ad._parse_card(card)
-        if l is None or not ad._passes_filters(l):
+        if l is None or ad._passes_filters(l) is not None:
             continue
         kept.append(l)
     assert kept, "filter should keep at least a few cards"
@@ -139,6 +139,7 @@ def test_detail_enrichment_fills_floor_and_amenities():
         price=6_000_000,
     )
     _apply_detail_enrichment(listing, soup)
+    assert listing.first_listed_date == "2024-07-02"
     assert listing.floor == 19
     # Fixture's amenity panel: elevator, parking, balcony, mamad, ac, renovated = True
     assert listing.elevator is True

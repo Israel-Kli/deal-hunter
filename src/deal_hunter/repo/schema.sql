@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS listings (
     lon             REAL,
 
     publish_date    TEXT    DEFAULT '',
+    first_listed_date TEXT  DEFAULT '',
     first_seen_at   TEXT    NOT NULL,
     last_seen_at    TEXT    NOT NULL,
 

@@ -26,9 +26,9 @@ def _parsed_listings():
     adapter = OnMapAdapter(city_slugs=["tel-aviv-yafo"], search=SEARCH)
     listings = []
     for raw in data["data"]:
-        l = adapter._parse(raw, "tel-aviv-yafo")
-        if l is not None:
-            listings.append(l)
+        listing, _reason = adapter._parse(raw, "tel-aviv-yafo")
+        if listing is not None:
+            listings.append(listing)
     return listings
 
 
@@ -77,7 +77,11 @@ def test_onmap_price_filter_drops_out_of_range():
     data = json.loads(FIXTURE.read_text(encoding="utf-8"))
     tight_search = dict(SEARCH, price_min=1, price_max=2_000_000)
     adapter = OnMapAdapter(city_slugs=["tel-aviv-yafo"], search=tight_search)
-    kept = [l for raw in data["data"] if (l := adapter._parse(raw, "tel-aviv-yafo"))]
+    kept = [
+        listing
+        for raw in data["data"]
+        if (listing := adapter._parse(raw, "tel-aviv-yafo")[0]) is not None
+    ]
     for l in kept:
         assert 1 <= l.price <= 2_000_000
 
