@@ -35,11 +35,11 @@ src/deal_hunter/
 Heuristic 1-10 score (`scoring/heuristic.py` + `scoring/description_signals.py`):
 
 1. **Price vs market** — smooth piecewise adjustment of ₪/m² vs band; band from comps (`fair_price_estimate`) when available, else `MARKET_REFS` by city/neighborhood.
-2. **Description** — penalty when text suggests apartment / דיור (e.g. יחידות דיור, apartment); capped bonus for garden/lot phrases + gradual bonus for many rooms (combined cap).
-3. **Physical** — parking, balcony, mamad, renovated, ground-floor discount (**elevator ignored** on purpose — cottage/private-house focus).
+2. **Description** — bonus when text mentions apartment / דיור (e.g. יחידות דיור, apartment); capped bonus for garden/lot phrases + gradual bonus for many rooms (combined cap).
+3. **Physical** — parking, balcony, renovated, ground-floor discount (elevator and mamad are not scored).
 4. **Seller** — private listings score higher than broker (`is_agent`).
 5. **Negotiation** — price-drop ramp vs previous ask.
-6. **Risk** — non-house without mamad; very high price liquidity penalty.
+6. **Risk** — very high price liquidity penalty only.
 
 Market bands defined in `scoring/heuristic.py:MARKET_REFS`. Add new cities here.
 
