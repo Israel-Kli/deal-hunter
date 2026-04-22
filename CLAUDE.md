@@ -32,12 +32,14 @@ src/deal_hunter/
 
 ## Scoring System
 
-Heuristic 1-10 score with 5 weighted components:
-1. **Price vs Market** (30%) — compares ₪/m² to city-specific `MARKET_REFS` bands
-2. **Rental Yield** (20%) — estimated gross yield from price
-3. **Physical** (20%) — amenities bonus (parking, elevator, balcony, mamad, renovated)
-4. **Negotiation** (15%) — private seller bonus, price drop history
-5. **Risk** (15%) — penalties for no elevator on high floor, no mamad, high price
+Heuristic 1-10 score (`scoring/heuristic.py` + `scoring/description_signals.py`):
+
+1. **Price vs market** — smooth piecewise adjustment of ₪/m² vs band; band from comps (`fair_price_estimate`) when available, else `MARKET_REFS` by city/neighborhood.
+2. **Description** — penalty when text suggests apartment / דיור (e.g. יחידות דיור, apartment); capped bonus for garden/lot phrases + gradual bonus for many rooms (combined cap).
+3. **Physical** — parking, balcony, mamad, renovated, ground-floor discount (**elevator ignored** on purpose — cottage/private-house focus).
+4. **Seller** — private listings score higher than broker (`is_agent`).
+5. **Negotiation** — price-drop ramp vs previous ask.
+6. **Risk** — non-house without mamad; very high price liquidity penalty.
 
 Market bands defined in `scoring/heuristic.py:MARKET_REFS`. Add new cities here.
 
@@ -72,11 +74,33 @@ Backup password: `Avtozavodsky2`
 - `schedule` — poll interval, request delay, max pages
 - `dashboard_host` — bind address (0.0.0.0 for external access)
 
-### Update Flow
+### Update Flow (local → Azure, no DB reset)
+
+After **any code or template change** you want live on the VM: commit and push from your dev machine, then pull on Azure and restart services. This updates the running app only; it does **not** touch `data/deal-hunter.db` (avoid `/api/reset` and avoid deleting the DB as part of deploy).
+
+**1. Locally (from the repo root)**
+
+```bash
+git add -A && git status   # review; exclude anything you must not ship
+git commit -m "Describe the change"
+git push origin main       # or your branch, then merge to main as you prefer
+```
+
+**2. On the Azure VM (install step only if `pyproject.toml` / deps changed)**
+
+```bash
+ssh azure-test "cd /opt/deal-hunter && git pull && .venv/bin/pip install -e . --quiet && sudo systemctl restart deal-hunter deal-hunter-dashboard"
+```
+
+If dependencies did not change, you can skip the install:
 
 ```bash
 ssh azure-test "cd /opt/deal-hunter && git pull && sudo systemctl restart deal-hunter deal-hunter-dashboard"
 ```
+
+**3. Agent / automation convention**
+
+Whenever changes are merged to the branch the VM tracks: **push → pull on Azure → restart** both units so the dashboard and scraper load the new code. Do not deploy by restarting alone without `git pull` on the server.
 
 ### Useful Commands
 
