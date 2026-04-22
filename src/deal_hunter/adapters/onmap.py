@@ -29,6 +29,7 @@ from urllib.parse import urlencode
 from deal_hunter.adapters.base import SearchFilters
 from deal_hunter.http_client import fetch
 from deal_hunter.models import Listing
+from deal_hunter.normalize.israeli_cities import hebrew_allowed_city_keys, hebrew_city_match_key
 
 log = logging.getLogger(__name__)
 
@@ -65,7 +66,10 @@ class OnMapAdapter:
         self.search = search
         self.max_pages = max_pages
         self.request_delay = request_delay_sec
-        self.allowed_cities = set(allowed_cities) if allowed_cities else None
+        if allowed_cities:
+            self._allowed_city_keys = hebrew_allowed_city_keys(list(allowed_cities))
+        else:
+            self._allowed_city_keys = None
 
     # ---- public ScraperAdapter surface ---------------------------------
 
@@ -128,6 +132,10 @@ class OnMapAdapter:
         if (item.get("currency") or "ILS") != "ILS":
             return None, "not_ils"
 
+        et = item.get("entityType")
+        if et is not None and et != "property":
+            return None, "not_property"
+
         source_id = item.get("id")
         if not source_id:
             return None, "no_source_id"
@@ -163,7 +171,7 @@ class OnMapAdapter:
         addr = item.get("address") or {}
         he = addr.get("he") or {}
         city = he.get("city_name") or ""
-        if self.allowed_cities and city not in self.allowed_cities:
+        if self._allowed_city_keys is not None and hebrew_city_match_key(city) not in self._allowed_city_keys:
             return None, "city_not_allowed"
         neighborhood = he.get("neighborhood") or ""
         street = he.get("street_name") or ""
@@ -177,8 +185,21 @@ class OnMapAdapter:
         lat = loc.get("lat") if isinstance(loc.get("lat"), (int, float)) else None
         lon = loc.get("lon") if isinstance(loc.get("lon"), (int, float)) else None
 
-        # Age filter
-        publish_dt = _parse_iso(item.get("search_date") or item.get("created_at") or "")
+        created_dt = _parse_iso(item.get("created_at") or "")
+        search_dt = _parse_iso(item.get("search_date") or "")
+        if created_dt and search_dt:
+            publish_dt = max(created_dt, search_dt)
+            first_listed_dt = min(created_dt, search_dt)
+        elif search_dt:
+            publish_dt = search_dt
+            first_listed_dt = search_dt
+        elif created_dt:
+            publish_dt = created_dt
+            first_listed_dt = created_dt
+        else:
+            publish_dt = None
+            first_listed_dt = None
+
         max_age = s.get("max_listing_age_days")
         if max_age and publish_dt:
             cutoff = datetime.now(timezone.utc) - timedelta(days=max_age)
@@ -223,6 +244,7 @@ class OnMapAdapter:
             lat=lat,
             lon=lon,
             publish_date=publish_dt.strftime("%Y-%m-%d") if publish_dt else "",
+            first_listed_date=first_listed_dt.strftime("%Y-%m-%d") if first_listed_dt else "",
             source_payload={"_city_slug": city_slug, "_slug": slug},
         ), None
 

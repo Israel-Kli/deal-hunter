@@ -200,6 +200,7 @@ class Yad2Adapter:
         price_per_sqm = round(price / size) if price and size and size > 0 else None
         coords = addr.get("coords", {}) or {}
 
+        pub_s = publish_date.strftime("%Y-%m-%d") if publish_date else ""
         return Listing(
             source="yad2",
             source_id=token,
@@ -228,7 +229,8 @@ class Yad2Adapter:
             tags=[t.get("name", "") for t in tags_raw if isinstance(t, dict)],
             lat=coords.get("lat"),
             lon=coords.get("lon"),
-            publish_date=publish_date.strftime("%Y-%m-%d") if publish_date else "",
+            publish_date=pub_s,
+            first_listed_date=pub_s,
             source_payload={"_slug": city.get("yad2_region") or city.get("slug", "")},
         ), None
 

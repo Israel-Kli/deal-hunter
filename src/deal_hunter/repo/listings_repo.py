@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
 
+from deal_hunter.dates import earliest_yyyy_mm_dd
 from deal_hunter.models import Listing, ScanResult
 
 SCHEMA_SQL = (Path(__file__).parent / "schema.sql").read_text(encoding="utf-8")
@@ -31,6 +32,8 @@ class ListingsRepo:
         columns = {row["name"] for row in cur.fetchall()}
         if "sqm_build" not in columns:
             self.conn.execute("ALTER TABLE listings ADD COLUMN sqm_build INTEGER")
+        if "first_listed_date" not in columns:
+            self.conn.execute("ALTER TABLE listings ADD COLUMN first_listed_date TEXT DEFAULT ''")
 
     def close(self) -> None:
         self.conn.close()
@@ -57,6 +60,19 @@ class ListingsRepo:
         prev_price: int | None = None
         is_new = existing is None
 
+        incoming_first = earliest_yyyy_mm_dd(
+            listing.first_listed_date,
+            listing.publish_date,
+        )
+        if existing:
+            listing.first_listed_date = earliest_yyyy_mm_dd(
+                incoming_first,
+                existing.get("first_listed_date") or "",
+                existing.get("publish_date") or "",
+            )
+        else:
+            listing.first_listed_date = incoming_first
+
         if is_new:
             listing.first_seen_at = listing.first_seen_at or datetime.utcnow()
             listing.last_seen_at = datetime.utcnow()
@@ -79,11 +95,11 @@ class ListingsRepo:
                 listing_type, is_agent,
                 parking, elevator, balcony, ac, mamad, renovated,
                 description, images_json, tags_json, lat, lon,
-                publish_date, first_seen_at, last_seen_at,
+                publish_date, first_listed_date, first_seen_at, last_seen_at,
                 canonical_id,
                 fair_price_estimate, fair_price_low, fair_price_high,
                 score, score_reasons, source_payload
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(source, source_id) DO UPDATE SET
                 url=excluded.url,
                 city=excluded.city,
@@ -112,6 +128,7 @@ class ListingsRepo:
                 lat=excluded.lat,
                 lon=excluded.lon,
                 publish_date=excluded.publish_date,
+                first_listed_date=excluded.first_listed_date,
                 last_seen_at=excluded.last_seen_at,
                 canonical_id=excluded.canonical_id,
                 fair_price_estimate=excluded.fair_price_estimate,
@@ -134,6 +151,7 @@ class ListingsRepo:
                 json.dumps(listing.tags, ensure_ascii=False),
                 listing.lat, listing.lon,
                 listing.publish_date,
+                listing.first_listed_date,
                 listing.first_seen_at.isoformat(), listing.last_seen_at.isoformat(),
                 listing.canonical_id,
                 listing.fair_price_estimate, listing.fair_price_low, listing.fair_price_high,

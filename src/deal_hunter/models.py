@@ -51,6 +51,7 @@ class Listing(BaseModel):
     lon: float | None = None
 
     publish_date: str = ""
+    first_listed_date: str = ""
     first_seen_at: datetime | None = None
     last_seen_at: datetime | None = None
 

@@ -221,7 +221,7 @@ def load_existing_groups(conn) -> dict[str, CanonicalGroup]:
         "house_number, address, rooms, sqm, floor, price, price_before, "
         "price_per_sqm, listing_type, is_agent, parking, elevator, balcony, "
         "ac, mamad, renovated, description, images_json, tags_json, lat, lon, "
-        "publish_date, first_seen_at, last_seen_at, canonical_id, "
+        "publish_date, first_listed_date, first_seen_at, last_seen_at, canonical_id, "
         "fair_price_estimate, fair_price_low, fair_price_high, score, "
         "score_reasons, source_payload "
         "FROM listings WHERE canonical_id IS NOT NULL"
@@ -261,6 +261,7 @@ def load_existing_groups(conn) -> dict[str, CanonicalGroup]:
             lat=r["lat"],
             lon=r["lon"],
             publish_date=r["publish_date"],
+            first_listed_date=r["first_listed_date"] or "",
             canonical_id=r["canonical_id"],
             fair_price_estimate=r["fair_price_estimate"],
             fair_price_low=r["fair_price_low"],
