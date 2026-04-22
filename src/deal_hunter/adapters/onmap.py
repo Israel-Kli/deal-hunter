@@ -259,10 +259,12 @@ def _parse_iso(s: str) -> datetime | None:
     if not s or not _ISO_RE.match(s):
         return None
     try:
-        # Handle "...Z" -> "+00:00" for fromisoformat
-        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 
 def _to_int(v: Any) -> int:

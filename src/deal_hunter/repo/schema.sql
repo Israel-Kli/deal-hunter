@@ -53,6 +53,9 @@ CREATE TABLE IF NOT EXISTS listings (
 
     source_payload  TEXT    DEFAULT '{}',
 
+    is_favorite     INTEGER NOT NULL DEFAULT 0,
+    user_notes      TEXT    NOT NULL DEFAULT '',
+
     PRIMARY KEY (source, source_id)
 );
 

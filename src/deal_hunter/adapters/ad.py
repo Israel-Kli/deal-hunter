@@ -70,7 +70,10 @@ AGENCY_KEYWORDS = [
     "רימקס", "RE/MAX", "קולדוול", "century", "סנצ'ורי",
 ]
 
-_AD_CREATION_DATE_RE = re.compile(r"תאריך\s*יצירה\s*:\s*(\d{1,2}/\d{1,2}/\d{4})")
+_AD_CREATION_DATE_RE = re.compile(
+    r"תאריך\s*יצירה\s*[:\s\u200f\u202a\u202c]*\s*(\d{1,2}/\d{1,2}/\d{4})",
+    re.UNICODE,
+)
 
 
 class AdAdapter:
@@ -443,7 +446,14 @@ def _apply_detail_enrichment(listing: Listing, soup: BeautifulSoup) -> None:
         if any(kw in txt for kw in AGENCY_KEYWORDS):
             listing.is_agent = True
 
-    m = _AD_CREATION_DATE_RE.search(soup.get_text(" ", strip=True) or "")
+    flat = soup.get_text(" ", strip=True) or ""
+    m = _AD_CREATION_DATE_RE.search(flat)
+    if not m:
+        for el in soup.select("div.px-3, .px-3, div[class*='px-']"):
+            t = el.get_text(" ", strip=True) if isinstance(el, Tag) else ""
+            m = _AD_CREATION_DATE_RE.search(t or "")
+            if m:
+                break
     if m:
         d = parse_dd_mm_yyyy(m.group(1))
         if d:

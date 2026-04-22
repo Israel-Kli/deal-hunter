@@ -66,6 +66,9 @@ class Listing(BaseModel):
 
     source_payload: dict[str, Any] = Field(default_factory=dict)
 
+    is_favorite: bool = False
+    user_notes: str = ""
+
 
 class Comp(BaseModel):
     """A single closed-deal / comparable sale."""

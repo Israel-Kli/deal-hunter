@@ -34,6 +34,10 @@ class ListingsRepo:
             self.conn.execute("ALTER TABLE listings ADD COLUMN sqm_build INTEGER")
         if "first_listed_date" not in columns:
             self.conn.execute("ALTER TABLE listings ADD COLUMN first_listed_date TEXT DEFAULT ''")
+        if "is_favorite" not in columns:
+            self.conn.execute("ALTER TABLE listings ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0")
+        if "user_notes" not in columns:
+            self.conn.execute("ALTER TABLE listings ADD COLUMN user_notes TEXT NOT NULL DEFAULT ''")
 
     def close(self) -> None:
         self.conn.close()
@@ -98,8 +102,9 @@ class ListingsRepo:
                 publish_date, first_listed_date, first_seen_at, last_seen_at,
                 canonical_id,
                 fair_price_estimate, fair_price_low, fair_price_high,
-                score, score_reasons, source_payload
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                score, score_reasons, source_payload,
+                is_favorite, user_notes
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(source, source_id) DO UPDATE SET
                 url=excluded.url,
                 city=excluded.city,
@@ -158,6 +163,8 @@ class ListingsRepo:
                 listing.score,
                 json.dumps(listing.score_reasons, ensure_ascii=False),
                 json.dumps(listing.source_payload, ensure_ascii=False),
+                0,
+                "",
             ),
         )
         self.conn.execute(
@@ -166,6 +173,33 @@ class ListingsRepo:
         )
         self.conn.commit()
         return is_new, prev_price
+
+    def update_user_fields(
+        self,
+        source: str,
+        source_id: str,
+        *,
+        is_favorite: bool | None = None,
+        user_notes: str | None = None,
+    ) -> bool:
+        """Update dashboard-only fields. Returns True if a row was updated."""
+        sets: list[str] = []
+        args: list[Any] = []
+        if is_favorite is not None:
+            sets.append("is_favorite=?")
+            args.append(1 if is_favorite else 0)
+        if user_notes is not None:
+            sets.append("user_notes=?")
+            args.append(user_notes[:2000])
+        if not sets:
+            return False
+        args.extend([source, source_id])
+        cur = self.conn.execute(
+            f"UPDATE listings SET {', '.join(sets)} WHERE source=? AND source_id=?",
+            args,
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
 
     def all_for_dashboard(self) -> list[dict[str, Any]]:
         rows = self.conn.execute(
@@ -177,8 +211,13 @@ class ListingsRepo:
             d["images"] = json.loads(d.get("images_json") or "[]")
             d["tags"] = json.loads(d.get("tags_json") or "[]")
             d["score_reasons"] = json.loads(d.get("score_reasons") or "{}")
-            for bf in ("parking", "elevator", "balcony", "ac", "mamad", "renovated", "is_agent"):
+            for bf in ("parking", "elevator", "balcony", "ac", "mamad", "renovated", "is_agent", "is_favorite"):
                 d[bf] = bool(d.get(bf))
+            d["user_notes"] = d.get("user_notes") or ""
+            fl = (d.get("first_listed_date") or "").strip()
+            pub = (d.get("publish_date") or "").strip()
+            if not fl and pub:
+                d["first_listed_date"] = pub
             d.pop("images_json", None)
             d.pop("tags_json", None)
             d.pop("source_payload", None)

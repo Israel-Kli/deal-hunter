@@ -11,11 +11,12 @@ from __future__ import annotations
 import json
 import sqlite3
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 
-from deal_hunter.adapters.yad2 import Yad2Adapter, _extract_items
+from deal_hunter.adapters.yad2 import Yad2Adapter, _extract_items, _publish_date_from_images
 from deal_hunter.comps.yad2_deals import extract_comps_from_html
 from deal_hunter.models import Listing
 from deal_hunter.repo.listings_repo import ListingsRepo
@@ -73,6 +74,11 @@ def test_yad2_feed_parse_returns_listings():
     assert first.url.startswith("https://"), "url must be https"
     assert first.city, "city must be populated"
     assert first.price_per_sqm is None or first.price_per_sqm > 0
+
+
+def test_yad2_publish_date_from_slash_separated_pic_path():
+    url = "https://img.yad2.co.il/Pic/2026/04/03/foo.jpeg"
+    assert _publish_date_from_images([url]) == datetime(2026, 4, 3)
 
 
 # ── 1b. Comps HTML parser ────────────────────────────────────────────────────
@@ -209,4 +215,38 @@ def test_repo_upsert_same_price_no_duplicate_history():
                 ("yad2", "test-001"),
             ).fetchone()
             assert rows[0] >= 1
+
+
+def test_dashboard_api_fills_first_listed_from_publish_when_missing():
+    """Rows with empty first_listed_date but valid publish_date still expose a date."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.db"
+        with ListingsRepo(db_path) as repo:
+            repo.conn.execute(
+                """INSERT INTO listings (
+                    source, source_id, url, city, price,
+                    publish_date, first_listed_date,
+                    first_seen_at, last_seen_at,
+                    images_json, tags_json, score_reasons, source_payload
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    "yad2",
+                    "legacy-1",
+                    "https://example.com/x",
+                    "תל אביב",
+                    1_000_000,
+                    "2022-05-05",
+                    "",
+                    "2026-01-01T00:00:00",
+                    "2026-01-01T00:00:00",
+                    "[]",
+                    "[]",
+                    "{}",
+                    "{}",
+                ),
+            )
+            repo.conn.commit()
+            rows = repo.all_for_dashboard()
+        assert rows, "expected one listing"
+        assert rows[0]["first_listed_date"] == "2022-05-05"
 

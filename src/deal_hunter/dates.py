@@ -34,6 +34,9 @@ def earliest_yyyy_mm_dd(*values: str | None) -> str:
     for v in values:
         if not v:
             continue
+        v = v.strip()
+        if not v:
+            continue
         d = parse_yyyy_mm_dd(v)
         if d:
             parsed.append(d)

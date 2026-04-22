@@ -18,3 +18,4 @@ def test_earliest_yyyy_mm_dd():
     assert earliest_yyyy_mm_dd("2024-08-01", "2024-07-02", "2025-01-01") == "2024-07-02"
     assert earliest_yyyy_mm_dd("", "2024-01-01") == "2024-01-01"
     assert earliest_yyyy_mm_dd("", "") == ""
+    assert earliest_yyyy_mm_dd("  2024-01-02  ") == "2024-01-02"
