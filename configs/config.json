@@ -35,8 +35,8 @@
   "sources": {
     "yad2":   true,
     "madlan": false,
-    "onmap":  false,
-    "ad":     false
+    "onmap":  true,
+    "ad":     true
   },
   "comps": {
     "yad2_deals": true,
