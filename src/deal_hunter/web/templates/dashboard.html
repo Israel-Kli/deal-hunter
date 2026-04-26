@@ -75,14 +75,14 @@
   .icon-btn-source .src-favicon { display:block; width:18px; height:18px; object-fit:contain; }
   mark.desc-hit { background:#fde047; color:#111827; font-weight:700; padding:0 3px; border-radius:3px; }
   .desc-stack { min-width:0; display:flex; flex-direction:column; gap:4px; align-items:stretch; }
-  .desc-row { display:flex; align-items:flex-end; gap:4px; min-width:0; }
+  .desc-row { display:flex; flex-wrap:wrap; align-items:flex-end; gap:4px 4px; min-width:0; }
   .user-notes-btn { flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:6px; border:1px solid #f59e0b; background:#fffbeb; color:#92400e; cursor:pointer; font-size:13px; padding:0; line-height:1; }
   .desc-stack.edit .user-notes-btn { display:none; }
   .user-notes-btn:hover { background:#fef3c7; }
   .user-notes-note { background:#fde047; color:#111827; font-weight:700; padding:3px 6px; border-radius:4px; font-size:12px; line-height:1.4; word-break:break-word; white-space:pre-wrap; display:none; }
   .user-notes-note.has-notes { display:block; }
   .desc-stack.edit .user-notes-note { display:none; }
-  .user-notes-editor { width:100%; box-sizing:border-box; border:1px solid #d97706; border-radius:6px; padding:5px 8px; font-size:12px; resize:vertical; min-height:2.6em; max-height:12em; background:#fff; color:#1a1a2e; font-family:inherit; line-height:1.35; display:none; }
+  .user-notes-editor { flex:1 1 100%; min-width:0; box-sizing:border-box; border:1px solid #d97706; border-radius:6px; padding:5px 8px; font-size:12px; resize:vertical; min-height:2.6em; max-height:12em; background:#fff; color:#1a1a2e; font-family:inherit; line-height:1.35; display:none; }
   .desc-stack.edit .user-notes-editor { display:block; }
   .user-notes-editor:focus { outline:2px solid #f59e0b; outline-offset:1px; }
   .user-notes-editor::placeholder { color:#a8a29e; }
@@ -489,9 +489,9 @@ function render() {
       '<div class="desc-row">' +
       descHtml +
       '<button type="button" class="user-notes-btn" title="' + (notes ? 'עריכת הערה' : 'הוספת הערה') + '" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '">📝</button>' +
+      '<textarea class="user-notes-editor" dir="rtl" rows="2" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '" placeholder="הערות שלי…"></textarea>' +
       '</div>' +
-      '<span class="user-notes-note' + (notes ? ' has-notes' : '') + '">' + (notes ? escapeHtml(notes) : '') + '</span>' +
-      '<textarea class="user-notes-editor" dir="rtl" rows="2" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '" placeholder="הערות שלי…"></textarea>';
+      '<span class="user-notes-note' + (notes ? ' has-notes' : '') + '">' + (notes ? escapeHtml(notes) : '') + '</span>';
     const addrFull = l.address || '';
     const addrShort = stripCityFromAddress(addrFull, l.city || '');
     const faviconUrl = sourceFaviconUrl(l.source);
