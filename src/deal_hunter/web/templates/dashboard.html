@@ -56,18 +56,23 @@
   .agent-badge.makler { background:#f59e0b; color:#fff; }
   .agent-badge.private { background:#22c55e; color:#fff; }
   .desc-cell {
-    flex:1 1 0%;
-    min-width:0;
-    display:-webkit-box;
-    -webkit-line-clamp:4;
-    -webkit-box-orient:vertical;
+    position:relative;
     overflow:hidden;
+    min-height:1.35em;
+    max-height:5.4em;
     word-break:break-word;
     line-height:1.35;
-    max-height:5.5em;
     cursor:help;
     font-size:12px;
     color:#4b5563;
+  }
+  /* Float spacer reserves space for the button only on the last line (shape-outside trick) */
+  .desc-cell::before {
+    content:'';
+    float:left;
+    width:28px;
+    height:100%;
+    shape-outside:inset(calc(100% - 1.35em) 0 0 0);
   }
   .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:6px; border:1px solid #d1d5db; background:#fff; color:#2563eb; font-size:14px; cursor:pointer; text-decoration:none; transition:background .15s; }
   .icon-btn:hover { background:#e0e7ff; text-decoration:none; }
@@ -76,9 +81,7 @@
   mark.desc-hit { background:#fde047; color:#111827; font-weight:700; padding:0 3px; border-radius:3px; }
   .desc-stack { min-width:0; display:flex; flex-direction:column; gap:4px; align-items:stretch; }
   .desc-stack.edit { gap:0; }
-  .desc-row { display:inline-flex; flex-wrap:wrap; align-items:flex-end; gap:4px; max-width:100%; }
-  .desc-cell { flex:1 1 auto; min-width:0; }
-  .user-notes-btn { flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:6px; border:1px solid #f59e0b; background:#fffbeb; color:#92400e; cursor:pointer; font-size:13px; padding:0; line-height:1; }
+  .user-notes-btn { position:absolute; bottom:0; left:0; z-index:1; display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:6px; border:1px solid #f59e0b; background:#fffbeb; color:#92400e; cursor:pointer; font-size:13px; padding:0; line-height:1; }
   .desc-stack.edit .user-notes-btn { display:none; }
   .user-notes-btn:hover { background:#fef3c7; }
   .user-notes-note { background:#fde047; color:#111827; font-weight:700; padding:3px 6px; border-radius:4px; font-size:12px; line-height:1.4; word-break:break-word; white-space:pre-wrap; display:none; }
@@ -483,14 +486,12 @@ function render() {
       ? '<span class="agent-badge makler" title="מודעה דרך מתווך">מתווך</span>'
       : '<span class="agent-badge private" title="מוכר פרטי">פרטי</span>';
     const desc = l.description || '';
-    const descHtml = desc
-      ? '<div class="desc-cell" title="' + escapeHtml(desc) + '">' + highlightDescPhrases(escapeHtml(desc)) + '</div>'
-      : '<div class="desc-cell"></div>';
     const notes = l.user_notes || '';
+    const notesBtnHtml = '<button type="button" class="user-notes-btn" title="' + (notes ? 'עריכת הערה' : 'הוספת הערה') + '" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '">📝</button>';
     const notesEditor =
-      '<div class="desc-row">' +
-      descHtml +
-      '<button type="button" class="user-notes-btn" title="' + (notes ? 'עריכת הערה' : 'הוספת הערה') + '" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '">📝</button>' +
+      '<div class="desc-cell" title="' + (desc ? escapeHtml(desc) : '') + '">' +
+      (desc ? highlightDescPhrases(escapeHtml(desc)) : '') +
+      notesBtnHtml +
       '</div>' +
       '<textarea class="user-notes-editor" dir="rtl" rows="2" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '" placeholder="הערות שלי…"></textarea>' +
       '<span class="user-notes-note' + (notes ? ' has-notes' : '') + '">' + (notes ? escapeHtml(notes) : '') + '</span>';
