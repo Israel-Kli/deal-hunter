@@ -56,6 +56,8 @@
   .agent-badge.makler { background:#f59e0b; color:#fff; }
   .agent-badge.private { background:#22c55e; color:#fff; }
   .desc-cell {
+    flex:1 1 0%;
+    min-width:0;
     display:-webkit-box;
     -webkit-line-clamp:4;
     -webkit-box-orient:vertical;
@@ -66,15 +68,15 @@
     cursor:help;
     font-size:12px;
     color:#4b5563;
-    padding-bottom:26px;
   }
   .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:6px; border:1px solid #d1d5db; background:#fff; color:#2563eb; font-size:14px; cursor:pointer; text-decoration:none; transition:background .15s; }
   .icon-btn:hover { background:#e0e7ff; text-decoration:none; }
   .icon-btn-source { padding:4px; }
   .icon-btn-source .src-favicon { display:block; width:18px; height:18px; object-fit:contain; }
   mark.desc-hit { background:#fde047; color:#111827; font-weight:700; padding:0 3px; border-radius:3px; }
-  .desc-stack { position:relative; min-width:0; display:flex; flex-direction:column; gap:4px; align-items:stretch; }
-  .user-notes-btn { position:absolute; bottom:2px; left:2px; display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:6px; border:1px solid #f59e0b; background:#fffbeb; color:#92400e; cursor:pointer; font-size:13px; padding:0; line-height:1; z-index:1; }
+  .desc-stack { min-width:0; display:flex; flex-direction:column; gap:4px; align-items:stretch; }
+  .desc-row { display:flex; align-items:flex-end; gap:4px; min-width:0; }
+  .user-notes-btn { flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:6px; border:1px solid #f59e0b; background:#fffbeb; color:#92400e; cursor:pointer; font-size:13px; padding:0; line-height:1; }
   .desc-stack.edit .user-notes-btn { display:none; }
   .user-notes-btn:hover { background:#fef3c7; }
   .user-notes-note { background:#fde047; color:#111827; font-weight:700; padding:3px 6px; border-radius:4px; font-size:12px; line-height:1.4; word-break:break-word; white-space:pre-wrap; display:none; }
@@ -481,10 +483,13 @@ function render() {
     const desc = l.description || '';
     const descHtml = desc
       ? '<div class="desc-cell" title="' + escapeHtml(desc) + '">' + highlightDescPhrases(escapeHtml(desc)) + '</div>'
-      : '';
+      : '<div class="desc-cell"></div>';
     const notes = l.user_notes || '';
     const notesEditor =
+      '<div class="desc-row">' +
+      descHtml +
       '<button type="button" class="user-notes-btn" title="' + (notes ? 'עריכת הערה' : 'הוספת הערה') + '" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '">📝</button>' +
+      '</div>' +
       '<span class="user-notes-note' + (notes ? ' has-notes' : '') + '">' + (notes ? escapeHtml(notes) : '') + '</span>' +
       '<textarea class="user-notes-editor" dir="rtl" rows="2" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '" placeholder="הערות שלי…"></textarea>';
     const addrFull = l.address || '';
@@ -505,7 +510,7 @@ function render() {
       '<td class="col-src"><a class="icon-btn icon-btn-source" href="' + escapeHtml(l.url) + '" target="_blank" rel="noopener" title="פתח מודעה ב־' + escapeHtml(sourceSiteTitle(l.source)) + '">' + srcImg + '</a></td>' +
       '<td class="col-date">' + (l.first_listed_date ? escapeHtml(l.first_listed_date) : '—') + '</td>' +
       '<td class="col-type">' + badge + '</td>' +
-      '<td class="col-desc"><div class="desc-stack">' + descHtml + notesEditor + '</div></td>' +
+      '<td class="col-desc"><div class="desc-stack">' + notesEditor + '</div></td>' +
       '<td class="col-num">' + (l.rooms ?? '—') + '</td>' +
       '<td class="col-num">' + (l.sqm ?? '—') + '</td>' +
       '<td class="col-num">' + (l.sqm_build ?? '—') + '</td>' +
