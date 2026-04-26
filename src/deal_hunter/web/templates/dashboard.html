@@ -76,7 +76,8 @@
   mark.desc-hit { background:#fde047; color:#111827; font-weight:700; padding:0 3px; border-radius:3px; }
   .desc-stack { min-width:0; display:flex; flex-direction:column; gap:4px; align-items:stretch; }
   .desc-stack.edit { gap:0; }
-  .desc-row { display:flex; align-items:flex-end; gap:4px; min-width:0; }
+  .desc-row { display:inline-flex; flex-wrap:wrap; align-items:flex-end; gap:4px; max-width:100%; }
+  .desc-cell { flex:1 1 auto; min-width:0; }
   .user-notes-btn { flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:6px; border:1px solid #f59e0b; background:#fffbeb; color:#92400e; cursor:pointer; font-size:13px; padding:0; line-height:1; }
   .desc-stack.edit .user-notes-btn { display:none; }
   .user-notes-btn:hover { background:#fef3c7; }
