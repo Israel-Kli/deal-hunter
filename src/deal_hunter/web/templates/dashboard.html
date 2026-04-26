@@ -73,9 +73,15 @@
   .icon-btn-source .src-favicon { display:block; width:18px; height:18px; object-fit:contain; }
   mark.desc-hit { background:#fde047; color:#111827; font-weight:700; padding:0 3px; border-radius:3px; }
   .desc-stack { min-width:0; display:flex; flex-direction:column; gap:6px; align-items:stretch; }
-  .user-notes-wrap { border:2px solid #f59e0b; border-radius:8px; padding:6px 8px; background:linear-gradient(180deg,#fffbeb 0%,#fef3c7 100%); box-shadow:0 1px 2px rgba(180,83,9,.12); }
-  .user-notes-label { font-size:10px; font-weight:800; color:#92400e; letter-spacing:.02em; display:block; margin-bottom:4px; }
-  .user-notes-editor { width:100%; box-sizing:border-box; border:1px solid #d97706; border-radius:6px; padding:5px 8px; font-size:12px; resize:vertical; min-height:2.6em; max-height:12em; background:#fff; color:#1a1a2e; font-family:inherit; line-height:1.35; }
+  .user-notes-wrap { display:flex; flex-direction:column; align-items:stretch; gap:4px; min-width:0; }
+  .user-notes-note { background:#fde047; color:#111827; font-weight:700; padding:3px 6px; border-radius:4px; font-size:12px; line-height:1.4; word-break:break-word; white-space:pre-wrap; display:none; }
+  .user-notes-note.has-notes { display:block; }
+  .user-notes-wrap.edit .user-notes-note { display:none; }
+  .user-notes-btn { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:6px; border:1px solid #f59e0b; background:#fffbeb; color:#92400e; cursor:pointer; font-size:13px; padding:0; flex-shrink:0; margin:0 auto; line-height:1; }
+  .user-notes-wrap.edit .user-notes-btn { display:none; }
+  .user-notes-btn:hover { background:#fef3c7; }
+  .user-notes-editor { width:100%; box-sizing:border-box; border:1px solid #d97706; border-radius:6px; padding:5px 8px; font-size:12px; resize:vertical; min-height:2.6em; max-height:12em; background:#fff; color:#1a1a2e; font-family:inherit; line-height:1.35; display:none; }
+  .user-notes-wrap.edit .user-notes-editor { display:block; }
   .user-notes-editor:focus { outline:2px solid #f59e0b; outline-offset:1px; }
   .user-notes-editor::placeholder { color:#a8a29e; }
 </style>
@@ -291,7 +297,7 @@ async function toggleFavorite(btn) {
     btn.disabled = false;
   }
 }
-function flushNoteSave(ta) {
+function flushNoteSave(ta, exitEdit) {
   const k = listingKey(ta.dataset.source, ta.dataset.sourceId);
   if (noteSaveTimers[k]) {
     clearTimeout(noteSaveTimers[k]);
@@ -301,7 +307,22 @@ function flushNoteSave(ta) {
   const sourceId = ta.dataset.sourceId;
   const text = ta.value;
   postListingUser({ source: source, source_id: sourceId, user_notes: text })
-    .then(function () { patchListingInAll(source, sourceId, { user_notes: text }); })
+    .then(function () {
+      patchListingInAll(source, sourceId, { user_notes: text });
+      if (exitEdit !== false) {
+        const wrap = ta.closest('.user-notes-wrap');
+        if (wrap) {
+          wrap.classList.remove('edit');
+          const noteSpan = wrap.querySelector('.user-notes-note');
+          if (noteSpan) {
+            noteSpan.textContent = text;
+            noteSpan.classList.toggle('has-notes', !!text);
+          }
+          const btn = wrap.querySelector('.user-notes-btn');
+          if (btn) btn.title = text ? 'עריכת הערה' : 'הוספת הערה';
+        }
+      }
+    })
     .catch(function (err) { console.warn(err); });
 }
 function scheduleNoteSave(ta) {
@@ -309,22 +330,25 @@ function scheduleNoteSave(ta) {
   if (noteSaveTimers[k]) clearTimeout(noteSaveTimers[k]);
   noteSaveTimers[k] = setTimeout(function () {
     delete noteSaveTimers[k];
-    flushNoteSave(ta);
+    flushNoteSave(ta, false);
   }, 650);
-}
-function syncNotesTextareas() {
-  document.querySelectorAll('textarea.user-notes-editor').forEach(function (ta) {
-    const row = all.find(function (l) {
-      return l.source === ta.dataset.source && String(l.source_id) === String(ta.dataset.sourceId);
-    });
-    if (row) ta.value = row.user_notes || '';
-  });
 }
 document.getElementById('rows').addEventListener('click', function(e) {
   const favBtn = e.target.closest('.fav-btn');
   if (favBtn) {
     e.preventDefault();
     toggleFavorite(favBtn);
+    return;
+  }
+  const notesBtn = e.target.closest('.user-notes-btn');
+  if (notesBtn) {
+    e.preventDefault();
+    const wrap = notesBtn.closest('.user-notes-wrap');
+    const ta = wrap.querySelector('.user-notes-editor');
+    const noteSpan = wrap.querySelector('.user-notes-note');
+    ta.value = noteSpan ? noteSpan.textContent : '';
+    wrap.classList.add('edit');
+    ta.focus();
     return;
   }
   const el = e.target.closest('.score');
@@ -458,9 +482,11 @@ function render() {
     const descHtml = desc
       ? '<div class="desc-cell" title="' + escapeHtml(desc) + '">' + highlightDescPhrases(escapeHtml(desc)) + '</div>'
       : '';
+    const notes = l.user_notes || '';
     const notesEditor =
       '<div class="user-notes-wrap">' +
-      '<span class="user-notes-label">פרטים חשובים (עריכה שלי)</span>' +
+      '<span class="user-notes-note' + (notes ? ' has-notes' : '') + '">' + (notes ? escapeHtml(notes) : '') + '</span>' +
+      '<button type="button" class="user-notes-btn" title="' + (notes ? 'עריכת הערה' : 'הוספת הערה') + '" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '">📝</button>' +
       '<textarea class="user-notes-editor" dir="rtl" rows="2" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '" placeholder="הערות שלי…"></textarea>' +
       '</div>';
     const addrFull = l.address || '';
@@ -490,7 +516,6 @@ function render() {
       '</tr>';
   }).join('');
   document.getElementById('rows').innerHTML = html || '<tr><td colspan="13" class="muted">אין תוצאות</td></tr>';
-  syncNotesTextareas();
   document.querySelectorAll('th.sort').forEach(th => {
     th.classList.toggle('sort-asc', th.dataset.key === sortKey && sortAsc);
     th.classList.toggle('sort-desc', th.dataset.key === sortKey && !sortAsc);
