@@ -286,6 +286,33 @@ def _make_handler(cfg: Config):
             self.send_response(404)
             self.end_headers()
 
+        def do_DELETE(self):
+            if self.path == "/api/listing/delete":
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                except ValueError:
+                    length = 0
+                raw = self.rfile.read(length) if length > 0 else b"{}"
+                try:
+                    data = json.loads(raw.decode("utf-8"))
+                except json.JSONDecodeError:
+                    self._write_json(400, {"status": "error", "error": "Invalid JSON"})
+                    return
+                source = data.get("source")
+                source_id = data.get("source_id")
+                if not source or not source_id:
+                    self._write_json(400, {"status": "error", "error": "source and source_id required"})
+                    return
+                with ListingsRepo(db_path) as repo:
+                    ok = repo.delete_listing(str(source), str(source_id))
+                if not ok:
+                    self._write_json(404, {"status": "error", "error": "Listing not found"})
+                    return
+                self._write_json(200, {"status": "ok", "ok": True})
+                return
+            self.send_response(404)
+            self.end_headers()
+
         def log_message(self, fmt, *args):
             log.info("http " + fmt, *args)
 

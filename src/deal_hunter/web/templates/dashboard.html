@@ -15,6 +15,9 @@
   .fav-btn { background:none; border:none; cursor:pointer; font-size:17px; line-height:1; padding:2px; color:#cbd5e1; }
   .fav-btn:hover { color:#94a3b8; }
   .fav-btn.fav-on { color:#ca8a04; }
+  th.col-del, td.col-del { width:2.25rem; max-width:2.35rem; padding:4px 2px; text-align:center; vertical-align:middle; }
+  .del-btn { background:none; border:none; cursor:pointer; font-size:13px; line-height:1; padding:2px; color:#cbd5e1; border-radius:3px; }
+  .del-btn:hover { color:#ef4444; background:#fef2f2; }
   th.col-score, td.col-score { width:2.75rem; max-width:2.85rem; padding:4px 3px; text-align:center; }
   th.col-city, td.col-city { width:4.5rem; max-width:5.5rem; padding:4px 4px; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:middle; }
   th.col-addr, td.col-addr { width:10%; min-width:88px; max-width:150px; }
@@ -155,6 +158,7 @@
         <th class="col-num sort" data-key="garden_sqm_eff">גינה (מ״ר)</th>
         <th class="col-price sort" data-key="price">מחיר</th>
         <th class="col-ppsqm sort" data-key="price_per_sqm_eff">₪/מ"ר</th>
+        <th class="col-del"></th>
       </tr>
     </thead>
     <tbody id="rows"></tbody>
@@ -332,6 +336,25 @@ async function toggleFavorite(btn) {
     btn.disabled = false;
   }
 }
+async function deleteListing(btn) {
+  const source = btn.dataset.source;
+  const sourceId = btn.dataset.sourceId;
+  if (!confirm('למחוק את המודעה הזו לצמיתות?')) return;
+  btn.disabled = true;
+  try {
+    const resp = await fetch('/api/listing/delete', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: source, source_id: sourceId }),
+    });
+    if (!resp.ok) throw new Error((await resp.json()).error || resp.statusText);
+    all = all.filter(function(l) { return !(l.source === source && String(l.source_id) === sourceId); });
+    render();
+  } catch (err) {
+    alert('מחיקה נכשלה: ' + (err && err.message ? err.message : err));
+    btn.disabled = false;
+  }
+}
 function flushNoteSave(ta, exitEdit) {
   const k = listingKey(ta.dataset.source, ta.dataset.sourceId);
   if (noteSaveTimers[k]) {
@@ -446,6 +469,12 @@ document.getElementById('rows').addEventListener('click', function(e) {
   if (favBtn) {
     e.preventDefault();
     toggleFavorite(favBtn);
+    return;
+  }
+  const delBtn = e.target.closest('.del-btn');
+  if (delBtn) {
+    e.preventDefault();
+    deleteListing(delBtn);
     return;
   }
   const notesBtn = e.target.closest('.user-notes-btn');
@@ -659,9 +688,10 @@ function render() {
       '<td class="col-num">' + editCellHtml(l, 'garden_sqm', 'garden_sqm_eff', 'garden_sqm') + '</td>' +
       '<td class="col-price">₪' + (l.price || 0).toLocaleString() + '</td>' +
       '<td class="col-ppsqm">' + ppsqmEff + '</td>' +
+      '<td class="col-del"><button type="button" class="del-btn" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '" title="מחיקה לצמיתות">✕</button></td>' +
       '</tr>';
   }).join('');
-  document.getElementById('rows').innerHTML = html || '<tr><td colspan="15" class="muted">אין תוצאות</td></tr>';
+  document.getElementById('rows').innerHTML = html || '<tr><td colspan="16" class="muted">אין תוצאות</td></tr>';
   document.querySelectorAll('th.sort').forEach(th => {
     th.classList.toggle('sort-asc', th.dataset.key === sortKey && sortAsc);
     th.classList.toggle('sort-desc', th.dataset.key === sortKey && !sortAsc);
