@@ -26,11 +26,11 @@
   th.col-src, td.col-src { width:2.5rem; max-width:2.6rem; padding:4px 2px; text-align:center; }
   th.col-date, td.col-date { width:5.25rem; max-width:5.5rem; padding:4px 3px; font-size:11px; white-space:nowrap; }
   th.col-type, td.col-type { width:3.1rem; max-width:3.4rem; padding:4px 2px; text-align:center; }
-  th.col-desc, td.col-desc { width:44%; min-width:160px; }
+  th.col-desc, td.col-desc { width:34%; min-width:140px; }
   th.col-num, td.col-num { width:3rem; max-width:3.25rem; padding:4px 3px; text-align:center; font-size:11px; font-variant-numeric: tabular-nums; white-space:nowrap; }
   th.col-price, td.col-price { width:5.25rem; max-width:5.5rem; padding:4px 4px; font-size:11px; font-variant-numeric: tabular-nums; white-space:nowrap; }
   th.col-ppsqm, td.col-ppsqm { width:4rem; max-width:4.25rem; padding:4px 3px; font-size:11px; font-variant-numeric: tabular-nums; white-space:nowrap; }
-  th { background:#e8ecf1; position:sticky; top:0; }
+  th { background:#e8ecf1; position:sticky; top:0; z-index:2; }
   tr:hover { background:#f0f4ff; }
   .score { display:inline-block; min-width:26px; padding:1px 4px; border-radius:5px; text-align:center; font-weight:600; font-size:11px; cursor:pointer; }
   .s-hot   { background:#22c55e; color:#fff; }
@@ -45,6 +45,11 @@
   th.sort::after { content:' ⇅'; opacity:.3; }
   th.sort.sort-asc::after { content:' ↑'; opacity:1; }
   th.sort.sort-desc::after { content:' ↓'; opacity:1; }
+  .edit-cell { cursor:pointer; display:inline-block; min-width:1.8rem; border-radius:2px; padding:0 2px; }
+  .edit-cell:hover { outline:1px dashed #94a3b8; }
+  .edit-cell.edit-override { text-decoration:underline; text-decoration-style:dotted; text-decoration-color:#ca8a04; }
+  .override-badge { color:#ca8a04; font-size:9px; margin-left:2px; vertical-align:middle; }
+  .edit-input { width:100%; box-sizing:border-box; padding:1px 3px; font-size:11px; text-align:center; border:1px solid #3b82f6; border-radius:3px; outline:none; font-family:inherit; }
   .scoring-info { background:#fff; border-radius:8px; padding:12px 16px; margin-bottom:16px; font-size:12px; color:#4b5563; box-shadow:0 1px 3px rgba(0,0,0,.08); line-height:1.6; }
   .scoring-info b { color:#1a1a2e; }
   .btn { border:none; border-radius:6px; padding:6px 14px; font-size:14px; cursor:pointer; }
@@ -66,7 +71,6 @@
     font-size:12px;
     color:#4b5563;
   }
-  /* Float spacer reserves space for the button only on the last line (shape-outside trick) */
   .desc-cell::before {
     content:'';
     float:left;
@@ -123,12 +127,15 @@
   </div>
   <div class="scoring-info">
     <b>ציון (1–10):</b>
-    מחיר מול שוק (חלק חלק) — ₪/מ״ר ביחס לטווח (כולל עסקאות דומות כשזמין) |
-    תיאור — יחידות דיור / יחידת דיור / יחידות או יחידה (מילה בפני עצמה) / מחולק / מחולקת / apartment מודגשים בצהוב ומעלים ציון (בלבד); גינה או חצר גדולה; חדרים רבים (בתקרה) |
+    מחיר מול שוק (חלק חלק) — ₪/מ״ר אפקטיבי (כולל עדכון ידני של מ״ר) |
+    יחידות דיור — ערך מפורש גובר על תיאור (בונוס) |
+    מגרש/גינה — מ״ר מפורש גובר על ביטויי תיאור |
+    תיאור — יחידות דיור / מחולק / apartment (גיבוי) |
     מתקנים — חניה, מרפסת, שיפוץ |
     מוכר — פרטי עדיף על תיווך |
     מו״מ — ירידת מחיר |
-    סיכון — מחיר גבוה מאוד (נזילות)
+    סיכון — מחיר גבוה מאוד (נזילות) |
+    <b>לחץ על תא מ״ר/יחידות/מגרש/גינה לעריכה</b>
   </div>
   <table>
     <thead>
@@ -142,10 +149,13 @@
         <th class="col-type">סוג</th>
         <th class="col-desc">תיאור</th>
         <th class="col-num sort" data-key="rooms">חדרים</th>
-        <th class="col-num sort" data-key="sqm">מ"ר (פרסום)</th>
-        <th class="col-num sort" data-key="sqm_build">מ"ר בנוי</th>
+        <th class="col-num sort" data-key="sqm_eff">מ"ר (אפקטיבי)</th>
+        <th class="col-num sort" data-key="sqm_build_eff">מ"ר בנוי</th>
+        <th class="col-num sort" data-key="units_count_eff">יחידות דיור</th>
+        <th class="col-num sort" data-key="lot_sqm_eff">מגרש (מ״ר)</th>
+        <th class="col-num sort" data-key="garden_sqm_eff">גינה (מ״ר)</th>
         <th class="col-price sort" data-key="price">מחיר</th>
-        <th class="col-ppsqm sort" data-key="price_per_sqm">₪/מ"ר</th>
+        <th class="col-ppsqm sort" data-key="price_per_sqm_eff">₪/מ"ר אפקטיבי</th>
       </tr>
     </thead>
     <tbody id="rows"></tbody>
@@ -162,6 +172,8 @@ let all = [];
 let sortKey = 'score';
 let sortAsc = false;
 const noteSaveTimers = {};
+let editingCell = null;
+
 function encodeReasonsB64(obj) {
   try {
     return btoa(unescape(encodeURIComponent(JSON.stringify(obj || {}))));
@@ -203,6 +215,7 @@ function fmtScoreReasons(reasons) {
   const map = {
     price_vs_market: 'מחיר מול שוק',
     price_vs_market_delta: 'שינוי ציון (מחיר)',
+    price_per_sqm_used: '₪/מ״ר בפועל',
     amenity_bonus: 'בונוס מתקנים',
     seller_channel: 'סוג מוכר',
     seller_adjustment: 'התאמת מוכר',
@@ -214,10 +227,15 @@ function fmtScoreReasons(reasons) {
     description_unit_hit: 'דיור בתיאור (בונוס)',
     matched_unit_phrases: 'ביטויים שזוהו',
     description_unit_adjustment: 'בונוס תיאור (דיור)',
-    garden_bonus: 'בונוס גינה/חצר',
+    description_unit_source: 'מקור יחידות דיור',
+    units_count_used: 'יחידות דיור (נספר)',
+    garden_bonus: 'בונוס מגרש/גינה',
+    garden_bonus_source: 'מקור מגרש/גינה',
     room_layout_bonus: 'בונוס חדרים',
     outdoor_rooms_bonus: 'סה״כ גינה+חדרים',
     matched_garden_phrases: 'ביטויי גינה',
+    lot_sqm_used: 'מגרש (מ״ר)',
+    garden_sqm_used: 'גינה (מ״ר)',
     final: 'ציון סופי',
   };
   const labels = {
@@ -225,6 +243,8 @@ function fmtScoreReasons(reasons) {
     market_refs: 'התייחסות שוק',
     agent: 'מתווך',
     private: 'פרטי',
+    structured: 'מפורש',
+    description: 'תיאור',
     'exceptional (>15% below band)': 'מצוין (>15% מתחת לטווח)',
     'below band': 'מתחת לטווח',
     'below midpoint': 'מתחת לאמצע הטווח',
@@ -232,7 +252,7 @@ function fmtScoreReasons(reasons) {
     'above band': 'מעל הטווח',
     'much above band': 'הרבה מעל הטווח',
   };
-  const priority = ['market_band','market_band_source','price_vs_market_delta','price_vs_market','description_unit_hit','matched_unit_phrases','description_unit_adjustment','garden_bonus','room_layout_bonus','outdoor_rooms_bonus','matched_garden_phrases','amenity_bonus','seller_channel','seller_adjustment','price_drop_pct','price_drop_bonus','risk_liquidity'];
+  const priority = ['market_band','market_band_source','price_vs_market_delta','price_vs_market','price_per_sqm_used','description_unit_hit','matched_unit_phrases','description_unit_adjustment','description_unit_source','units_count_used','garden_bonus','garden_bonus_source','room_layout_bonus','outdoor_rooms_bonus','matched_garden_phrases','lot_sqm_used','garden_sqm_used','amenity_bonus','seller_channel','seller_adjustment','price_drop_pct','price_drop_bonus','risk_liquidity'];
   const entries = Object.entries(reasons).filter(([k]) => k !== 'final');
   entries.sort((a, b) => {
     const ia = priority.indexOf(a[0]);
@@ -272,6 +292,16 @@ document.getElementById('scoreModal').addEventListener('click', function(e) {
 });
 async function postListingUser(body) {
   const r = await fetch('/api/listing/user', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || r.statusText || 'שגיאה');
+  return d;
+}
+async function postListingEdit(body) {
+  const r = await fetch('/api/listing/edit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -340,6 +370,79 @@ function scheduleNoteSave(ta) {
     flushNoteSave(ta, false);
   }, 650);
 }
+
+function editCellHtml(l, field, effField, scrapedField) {
+  const val = l[effField];
+  const scraped = l[scrapedField];
+  const userField = field + '_user';
+  const hasOverride = l[userField] != null;
+  const tooltip = hasOverride ? ('ערך מקורי: ' + (scraped != null ? scraped : '—')) : 'לחץ לעריכה';
+  const cls = 'edit-cell' + (hasOverride ? ' edit-override' : '');
+  const badge = hasOverride ? '<span class="override-badge">✎</span>' : '';
+  return '<span class="' + cls + '" title="' + escapeHtml(tooltip) + '" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '" data-field="' + userField + '">' + badge + (val != null ? val : '—') + '</span>';
+}
+
+function startCellEdit(el) {
+  if (editingCell) {
+    cancelCellEdit(editingCell);
+  }
+  const val = el.textContent.replace(/[^0-9]/g, '');
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.min = '0';
+  input.className = 'edit-input';
+  input.value = val || '';
+  input.dataset.source = el.dataset.source;
+  input.dataset.sourceId = el.dataset.sourceId;
+  input.dataset.field = el.dataset.field;
+  el.textContent = '';
+  el.appendChild(input);
+  el.classList.add('editing');
+  input.focus();
+  input.select();
+  editingCell = el;
+}
+
+function cancelCellEdit(el) {
+  if (!el) return;
+  el.classList.remove('editing');
+  el.innerHTML = '';
+  editingCell = null;
+  render();
+}
+
+async function saveCellEdit(el) {
+  const input = el.querySelector('.edit-input');
+  if (!input) { cancelCellEdit(el); return; }
+  const source = input.dataset.source;
+  const sourceId = input.dataset.sourceId;
+  const field = input.dataset.field;
+  const rawVal = input.value.trim();
+  const val = rawVal === '' ? null : parseInt(rawVal, 10);
+  if (rawVal !== '' && (isNaN(val) || val < 0)) { cancelCellEdit(el); return; }
+  el.classList.remove('editing');
+  editingCell = null;
+  const body = { source: source, source_id: sourceId };
+  body[field] = val;
+  try {
+    const d = await postListingEdit(body);
+    patchListingInAll(source, sourceId, {
+      score: d.score,
+      score_reasons: d.score_reasons,
+      sqm_eff: d.sqm_eff,
+      sqm_build_eff: d.sqm_build_eff,
+      units_count_eff: d.units_count_eff,
+      lot_sqm_eff: d.lot_sqm_eff,
+      garden_sqm_eff: d.garden_sqm_eff,
+      price_per_sqm_eff: d.price_per_sqm_eff,
+      [field]: val,
+    });
+    render();
+  } catch (err) {
+    render();
+  }
+}
+
 document.getElementById('rows').addEventListener('click', function(e) {
   const favBtn = e.target.closest('.fav-btn');
   if (favBtn) {
@@ -358,12 +461,48 @@ document.getElementById('rows').addEventListener('click', function(e) {
     ta.focus();
     return;
   }
+  const editCell = e.target.closest('.edit-cell');
+  if (editCell && !editCell.classList.contains('editing')) {
+    e.preventDefault();
+    startCellEdit(editCell);
+    return;
+  }
   const el = e.target.closest('.score');
   if (!el || !el.dataset.rb64) return;
   try {
     const json = decodeURIComponent(escape(atob(el.dataset.rb64)));
     showScoreReasons(JSON.parse(json));
   } catch (err) {}
+});
+document.getElementById('rows').addEventListener('dblclick', function(e) {
+  const editCell = e.target.closest('.edit-cell');
+  if (editCell && !editCell.classList.contains('editing')) {
+    startCellEdit(editCell);
+  }
+});
+document.getElementById('rows').addEventListener('keydown', function(e) {
+  const input = e.target.closest('.edit-input');
+  if (!input) return;
+  const el = input.closest('.edit-cell');
+  if (!el) return;
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    saveCellEdit(el);
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    cancelCellEdit(el);
+  }
+});
+document.getElementById('rows').addEventListener('focusout', function(e) {
+  const input = e.target.closest('.edit-input');
+  if (!input) return;
+  const el = input.closest('.edit-cell');
+  if (!el) return;
+  setTimeout(function () {
+    if (!el.contains(document.activeElement)) {
+      saveCellEdit(el);
+    }
+  }, 100);
 });
 document.getElementById('rows').addEventListener('input', function (e) {
   if (!e.target.classList.contains('user-notes-editor')) return;
@@ -505,6 +644,7 @@ function render() {
     const isFav = !!l.is_favorite;
     const favStar = isFav ? '★' : '☆';
     const favCls = 'fav-btn' + (isFav ? ' fav-on' : '');
+    const ppsqmEff = l.price_per_sqm_eff != null ? '₪' + l.price_per_sqm_eff.toLocaleString() : '—';
     return '<tr>' +
       '<td class="col-fav"><button type="button" class="' + favCls + '" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '" aria-pressed="' + (isFav ? 'true' : 'false') + '" title="מועדף">' + favStar + '</button></td>' +
       '<td class="col-score"><span class="score ' + scoreClass(l.score) + '" data-rb64="' + rb64 + '">' + (l.score ?? '—') + '</span></td>' +
@@ -515,13 +655,16 @@ function render() {
       '<td class="col-type">' + badge + '</td>' +
       '<td class="col-desc"><div class="desc-stack">' + notesEditor + '</div></td>' +
       '<td class="col-num">' + (l.rooms ?? '—') + '</td>' +
-      '<td class="col-num">' + (l.sqm ?? '—') + '</td>' +
-      '<td class="col-num">' + (l.sqm_build ?? '—') + '</td>' +
+      '<td class="col-num">' + editCellHtml(l, 'sqm', 'sqm_eff', 'sqm') + '</td>' +
+      '<td class="col-num">' + editCellHtml(l, 'sqm_build', 'sqm_build_eff', 'sqm_build') + '</td>' +
+      '<td class="col-num">' + editCellHtml(l, 'units_count', 'units_count_eff', 'units_count') + '</td>' +
+      '<td class="col-num">' + editCellHtml(l, 'lot_sqm', 'lot_sqm_eff', 'lot_sqm') + '</td>' +
+      '<td class="col-num">' + editCellHtml(l, 'garden_sqm', 'garden_sqm_eff', 'garden_sqm') + '</td>' +
       '<td class="col-price">₪' + (l.price || 0).toLocaleString() + '</td>' +
-      '<td class="col-ppsqm">' + (l.price_per_sqm ? '₪' + l.price_per_sqm.toLocaleString() : '—') + '</td>' +
+      '<td class="col-ppsqm">' + ppsqmEff + '</td>' +
       '</tr>';
   }).join('');
-  document.getElementById('rows').innerHTML = html || '<tr><td colspan="13" class="muted">אין תוצאות</td></tr>';
+  document.getElementById('rows').innerHTML = html || '<tr><td colspan="16" class="muted">אין תוצאות</td></tr>';
   document.querySelectorAll('th.sort').forEach(th => {
     th.classList.toggle('sort-asc', th.dataset.key === sortKey && sortAsc);
     th.classList.toggle('sort-desc', th.dataset.key === sortKey && !sortAsc);

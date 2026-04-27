@@ -56,6 +56,16 @@ CREATE TABLE IF NOT EXISTS listings (
     is_favorite     INTEGER NOT NULL DEFAULT 0,
     user_notes      TEXT    NOT NULL DEFAULT '',
 
+    units_count     INTEGER,
+    lot_sqm         INTEGER,
+    garden_sqm      INTEGER,
+
+    sqm_user        INTEGER,
+    sqm_build_user  INTEGER,
+    units_count_user INTEGER,
+    lot_sqm_user    INTEGER,
+    garden_sqm_user INTEGER,
+
     PRIMARY KEY (source, source_id)
 );
 

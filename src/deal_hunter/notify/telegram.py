@@ -8,6 +8,7 @@ import time
 
 import requests
 
+from deal_hunter.effective import effective_price_per_sqm
 from deal_hunter.models import Listing
 
 log = logging.getLogger(__name__)
@@ -21,7 +22,7 @@ def _fmt(listing: Listing) -> str:
         f"🔥 <b>הזדמנות! [{score}/10]</b>\n"
         f"📍 {listing.address}\n"
         f"💰 ₪{listing.price:,}"
-        f" ({listing.price_per_sqm or 0:,}/מ\"ר)"
+        f" ({effective_price_per_sqm(listing) or 0:,}/מ\"ר)"
         f"{fair_line}\n"
         f"🛏 {listing.rooms or '?'} חד׳ | 📐 {listing.sqm or '?'}מ\"ר | קומה {listing.floor if listing.floor is not None else '?'}\n"
         f"🏷 מקור: {listing.source}\n"

@@ -10,7 +10,17 @@ from pathlib import Path
 
 from deal_hunter.config import Config
 from deal_hunter.dedup.canonicalizer import load_existing_groups
+from deal_hunter.effective import (
+    effective_garden_sqm,
+    effective_lot_sqm,
+    effective_price_per_sqm,
+    effective_sqm,
+    effective_sqm_build,
+    effective_units,
+)
+from deal_hunter.models import Listing
 from deal_hunter.repo.listings_repo import ListingsRepo
+from deal_hunter.scoring.heuristic import score_listing
 
 log = logging.getLogger(__name__)
 TEMPLATES = Path(__file__).parent / "templates"
@@ -135,6 +145,106 @@ def _make_handler(cfg: Config):
                     self._write_json(404, {"status": "error", "error": "Listing not found"})
                     return
                 self._write_json(200, {"status": "ok", "ok": True})
+                return
+            if self.path == "/api/listing/edit":
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                except ValueError:
+                    length = 0
+                raw = self.rfile.read(length) if length > 0 else b"{}"
+                try:
+                    data = json.loads(raw.decode("utf-8"))
+                except json.JSONDecodeError:
+                    self._write_json(400, {"status": "error", "error": "Invalid JSON"})
+                    return
+                source = data.get("source")
+                source_id = data.get("source_id")
+                if not source or not source_id:
+                    self._write_json(400, {"status": "error", "error": "source and source_id required"})
+                    return
+                with ListingsRepo(db_path) as repo:
+                    row = repo.get_dict(str(source), str(source_id))
+                    if not row:
+                        self._write_json(404, {"status": "error", "error": "Listing not found"})
+                        return
+                    overrides: dict = {}
+                    for col in ("sqm_user", "sqm_build_user", "units_count_user", "lot_sqm_user", "garden_sqm_user"):
+                        if col in data:
+                            val = data[col]
+                            if val is not None:
+                                try:
+                                    val = int(val)
+                                except (ValueError, TypeError):
+                                    self._write_json(400, {"status": "error", "error": f"{col} must be an integer or null"})
+                                    return
+                            overrides[col] = val
+                    ok = repo.update_user_fields(str(source), str(source_id), **overrides)
+                    row = repo.get_dict(str(source), str(source_id))
+                    listing_for_score = Listing(
+                        source=row["source"],
+                        source_id=row["source_id"],
+                        url=row.get("url") or "",
+                        city=row.get("city") or "",
+                        neighborhood=row.get("neighborhood") or "",
+                        street=row.get("street") or "",
+                        house_number=row.get("house_number") or "",
+                        address=row.get("address") or "",
+                        rooms=row.get("rooms"),
+                        sqm=row.get("sqm"),
+                        sqm_build=row.get("sqm_build"),
+                        floor=row.get("floor"),
+                        price=row["price"],
+                        price_before=row.get("price_before"),
+                        price_per_sqm=row.get("price_per_sqm"),
+                        listing_type=row.get("listing_type") or "",
+                        is_agent=bool(row.get("is_agent")),
+                        parking=bool(row.get("parking")),
+                        elevator=bool(row.get("elevator")),
+                        balcony=bool(row.get("balcony")),
+                        ac=bool(row.get("ac")),
+                        mamad=bool(row.get("mamad")),
+                        renovated=bool(row.get("renovated")),
+                        description=row.get("description") or "",
+                        tags=json.loads(row.get("tags_json") or "[]"),
+                        lat=row.get("lat"),
+                        lon=row.get("lon"),
+                        publish_date=row.get("publish_date") or "",
+                        first_listed_date=row.get("first_listed_date") or "",
+                        is_favorite=bool(row.get("is_favorite")),
+                        user_notes=row.get("user_notes") or "",
+                        sqm_user=row.get("sqm_user"),
+                        sqm_build_user=row.get("sqm_build_user"),
+                        units_count_user=row.get("units_count_user"),
+                        lot_sqm_user=row.get("lot_sqm_user"),
+                        garden_sqm_user=row.get("garden_sqm_user"),
+                        units_count=row.get("units_count"),
+                        lot_sqm=row.get("lot_sqm"),
+                        garden_sqm=row.get("garden_sqm"),
+                    )
+                    new_score, new_reasons = score_listing(listing_for_score)
+                    repo.conn.execute(
+                        "UPDATE listings SET score=?, score_reasons=? WHERE source=? AND source_id=?",
+                        (new_score, json.dumps(new_reasons, ensure_ascii=False), str(source), str(source_id)),
+                    )
+                    repo.conn.commit()
+                body = json.dumps({
+                    "status": "ok",
+                    "ok": True,
+                    "score": new_score,
+                    "score_reasons": new_reasons,
+                    "sqm_eff": effective_sqm(row),
+                    "sqm_build_eff": effective_sqm_build(row),
+                    "units_count_eff": effective_units(row),
+                    "lot_sqm_eff": effective_lot_sqm(row),
+                    "garden_sqm_eff": effective_garden_sqm(row),
+                    "price_per_sqm_eff": effective_price_per_sqm(row),
+                }, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
                 return
             if self.path == "/api/reset":
                 with ListingsRepo(db_path) as repo:
