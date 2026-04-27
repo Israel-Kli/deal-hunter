@@ -125,6 +125,7 @@ class OnMapAdapter:
 
     def _parse(self, item: dict[str, Any], city_slug: str) -> tuple[Listing | None, str | None]:
         s = self.search
+        source_id = item.get("id")
 
         # Only residential buy listings priced in ILS
         if item.get("search_option") != "buy":
@@ -136,21 +137,23 @@ class OnMapAdapter:
         if et is not None and et != "property":
             return None, "not_property"
 
-        source_id = item.get("id")
         if not source_id:
             return None, "no_source_id"
 
         price = item.get("price")
         if not isinstance(price, (int, float)) or price <= 0:
+            log.debug("OnMap filtered: reason=bad_price id=%s price=%s", source_id, price)
             return None, "bad_price"
         price = int(price)
         if price < s.get("price_min", 0) or price > s.get("price_max", 10**12):
+            log.debug("OnMap filtered: reason=price_out_of_range id=%s price=%d expected=[%s, %s]", source_id, price, s.get("price_min", 0), s.get("price_max", 10**12))
             return None, "price_out_of_range"
 
         info = item.get("additional_info") or {}
         rooms = info.get("rooms")
         if isinstance(rooms, (int, float)):
             if not (s.get("rooms_min", 0) <= float(rooms) <= s.get("rooms_max", 99)):
+                log.debug("OnMap filtered: reason=rooms_out_of_range id=%s rooms=%s expected=[%s, %s]", source_id, rooms, s.get("rooms_min", 0), s.get("rooms_max", 99))
                 return None, "rooms_out_of_range"
             rooms_f = float(rooms)
         else:
@@ -159,6 +162,7 @@ class OnMapAdapter:
         area = info.get("area") or {}
         sqm = area.get("base") if isinstance(area.get("base"), (int, float)) else None
         if s.get("min_sqm") and sqm and sqm < s["min_sqm"]:
+            log.debug("OnMap filtered: reason=sqm_too_small id=%s sqm=%s min_sqm=%s", source_id, sqm, s["min_sqm"])
             return None, "sqm_too_small"
         sqm_i = int(sqm) if sqm else None
 
@@ -166,12 +170,14 @@ class OnMapAdapter:
         floor_val = floor_obj.get("on_the")
         floor_i = int(floor_val) if isinstance(floor_val, (int, float)) else None
         if s.get("exclude_ground_floor") and floor_i == 0:
+            log.debug("OnMap filtered: reason=ground_floor id=%s", source_id)
             return None, "ground_floor"
 
         addr = item.get("address") or {}
         he = addr.get("he") or {}
         city = he.get("city_name") or ""
         if self._allowed_city_keys is not None and hebrew_city_match_key(city) not in self._allowed_city_keys:
+            log.debug("OnMap filtered: reason=city_not_allowed id=%s city=%s", source_id, city)
             return None, "city_not_allowed"
         neighborhood = he.get("neighborhood") or ""
         street = he.get("street_name") or ""
@@ -204,12 +210,15 @@ class OnMapAdapter:
         if max_age and publish_dt:
             cutoff = datetime.now(timezone.utc) - timedelta(days=max_age)
             if publish_dt < cutoff:
+                log.debug("OnMap filtered: reason=too_old id=%s publish_date=%s max_age=%s", source_id, publish_dt.strftime("%Y-%m-%d"), max_age)
                 return None, "too_old"
 
         images = _extract_image_urls(item.get("images") or [])
 
         parking_obj = info.get("parking") or {}
         parking = bool(_to_int(parking_obj.get("aboveground")) or _to_int(parking_obj.get("underground")))
+
+        log.debug("OnMap parsed: id=%s price=%d rooms=%s sqm=%s city=%s neighborhood=%s", source_id, price, rooms_f, sqm_i, city, neighborhood)
 
         slug = item.get("slug") or ""
         url = f"{WEB_BASE}/{slug}" if slug else f"{WEB_BASE}/property/{source_id}"
