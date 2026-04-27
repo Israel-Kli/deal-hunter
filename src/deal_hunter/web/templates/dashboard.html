@@ -113,13 +113,6 @@
       <option value="onmap">OnMap</option>
       <option value="ad">ad.co.il</option>
     </select>
-    <select id="minScore">
-      <option value="0">ציון מכל</option>
-      <option value="6">≥ 6</option>
-      <option value="7" selected>≥ 7</option>
-      <option value="8">≥ 8</option>
-      <option value="9">≥ 9</option>
-    </select>
     <select id="agentType">
       <option value="">הכל</option>
       <option value="private">פרטי בלבד</option>
@@ -646,11 +639,9 @@ function stripCityFromAddress(address, city) {
 function render() {
   const q = document.getElementById('q').value.trim();
   const src = document.getElementById('src').value;
-  const min = parseFloat(document.getElementById('minScore').value);
   const agentFilter = document.getElementById('agentType').value;
   let rows = all.filter(l => {
     if (src && l.source !== src) return false;
-    if ((l.score ?? 0) < min) return false;
     if (agentFilter === 'private' && l.is_agent) return false;
     if (agentFilter === 'agent' && !l.is_agent) return false;
     if (q && !(l.address || '').includes(q) && !(l.neighborhood || '').includes(q) && !(l.city || '').includes(q)) return false;
@@ -722,7 +713,6 @@ function render() {
 }
 document.getElementById('q').addEventListener('input', render);
 document.getElementById('src').addEventListener('change', render);
-document.getElementById('minScore').addEventListener('change', render);
 document.getElementById('agentType').addEventListener('change', render);
 document.querySelectorAll('th.sort').forEach(th => th.addEventListener('click', () => doSort(th.dataset.key)));
 load();
