@@ -12,7 +12,17 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from deal_hunter.dates import earliest_yyyy_mm_dd
+from deal_hunter.effective import (
+    effective_garden_sqm,
+    effective_lot_sqm,
+    effective_price_per_sqm,
+    effective_sqm,
+    effective_sqm_build,
+    effective_units,
+)
 from deal_hunter.models import Listing, ScanResult
+
+_UNSET = object()
 
 SCHEMA_SQL = (Path(__file__).parent / "schema.sql").read_text(encoding="utf-8")
 
@@ -38,6 +48,12 @@ class ListingsRepo:
             self.conn.execute("ALTER TABLE listings ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0")
         if "user_notes" not in columns:
             self.conn.execute("ALTER TABLE listings ADD COLUMN user_notes TEXT NOT NULL DEFAULT ''")
+        for col in ("units_count", "lot_sqm", "garden_sqm"):
+            if col not in columns:
+                self.conn.execute(f"ALTER TABLE listings ADD COLUMN {col} INTEGER")
+        for col in ("sqm_user", "sqm_build_user", "units_count_user", "lot_sqm_user", "garden_sqm_user"):
+            if col not in columns:
+                self.conn.execute(f"ALTER TABLE listings ADD COLUMN {col} INTEGER")
 
     def close(self) -> None:
         self.conn.close()
@@ -103,8 +119,24 @@ class ListingsRepo:
                 canonical_id,
                 fair_price_estimate, fair_price_low, fair_price_high,
                 score, score_reasons, source_payload,
-                is_favorite, user_notes
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                is_favorite, user_notes,
+                units_count, lot_sqm, garden_sqm,
+                sqm_user, sqm_build_user, units_count_user, lot_sqm_user, garden_sqm_user
+            ) VALUES (
+                ?,?,?, ?,?,?,?,?,
+                ?,?,?,?,
+                ?,?,?,
+                ?,?,
+                ?,?,?,?,?,?,
+                ?,?,?,?,?,
+                ?,?,?,?,
+                ?,
+                ?,?,?,
+                ?,?,?,
+                ?,?,
+                ?,?,?,
+                ?,?,?,?,?
+            )
             ON CONFLICT(source, source_id) DO UPDATE SET
                 url=excluded.url,
                 city=excluded.city,
@@ -141,7 +173,10 @@ class ListingsRepo:
                 fair_price_high=excluded.fair_price_high,
                 score=excluded.score,
                 score_reasons=excluded.score_reasons,
-                source_payload=excluded.source_payload
+                source_payload=excluded.source_payload,
+                units_count=excluded.units_count,
+                lot_sqm=excluded.lot_sqm,
+                garden_sqm=excluded.garden_sqm
             """,
             (
                 listing.source, listing.source_id, listing.url,
@@ -165,6 +200,9 @@ class ListingsRepo:
                 json.dumps(listing.source_payload, ensure_ascii=False),
                 0,
                 "",
+                listing.units_count, listing.lot_sqm, listing.garden_sqm,
+                listing.sqm_user, listing.sqm_build_user,
+                listing.units_count_user, listing.lot_sqm_user, listing.garden_sqm_user,
             ),
         )
         self.conn.execute(
@@ -181,8 +219,15 @@ class ListingsRepo:
         *,
         is_favorite: bool | None = None,
         user_notes: str | None = None,
+        sqm_user: int | None = _UNSET,
+        sqm_build_user: int | None = _UNSET,
+        units_count_user: int | None = _UNSET,
+        lot_sqm_user: int | None = _UNSET,
+        garden_sqm_user: int | None = _UNSET,
     ) -> bool:
-        """Update dashboard-only fields. Returns True if a row was updated."""
+        """Update dashboard-only fields including overrides.
+        Pass a value to set, None to clear override, omit to leave unchanged.
+        """
         sets: list[str] = []
         args: list[Any] = []
         if is_favorite is not None:
@@ -191,6 +236,19 @@ class ListingsRepo:
         if user_notes is not None:
             sets.append("user_notes=?")
             args.append(user_notes[:2000])
+
+        override_map = {
+            "sqm_user": sqm_user,
+            "sqm_build_user": sqm_build_user,
+            "units_count_user": units_count_user,
+            "lot_sqm_user": lot_sqm_user,
+            "garden_sqm_user": garden_sqm_user,
+        }
+        for col, val in override_map.items():
+            if val is not _UNSET:
+                sets.append(f"{col}=?")
+                args.append(val)
+
         if not sets:
             return False
         args.extend([source, source_id])
@@ -200,6 +258,12 @@ class ListingsRepo:
         )
         self.conn.commit()
         return cur.rowcount > 0
+
+    def get_dict(self, source: str, source_id: str) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            "SELECT * FROM listings WHERE source=? AND source_id=?", (source, source_id)
+        ).fetchone()
+        return dict(row) if row else None
 
     def all_for_dashboard(self) -> list[dict[str, Any]]:
         rows = self.conn.execute(
@@ -221,6 +285,12 @@ class ListingsRepo:
             d.pop("images_json", None)
             d.pop("tags_json", None)
             d.pop("source_payload", None)
+            d["sqm_eff"] = effective_sqm(d)
+            d["sqm_build_eff"] = effective_sqm_build(d)
+            d["units_count_eff"] = effective_units(d)
+            d["lot_sqm_eff"] = effective_lot_sqm(d)
+            d["garden_sqm_eff"] = effective_garden_sqm(d)
+            d["price_per_sqm_eff"] = effective_price_per_sqm(d)
             out.append(d)
         return out
 

@@ -17,6 +17,7 @@ from deal_hunter.dedup.canonicalizer import CanonicalGroup, dedup_batch, load_ex
 from deal_hunter.models import Listing, ScanResult
 from deal_hunter.notify import telegram
 from deal_hunter.repo.listings_repo import ListingsRepo
+from deal_hunter.normalize.extract_features import extract_features
 from deal_hunter.scoring.heuristic import score_listing
 from deal_hunter.valuation.fair_price import enrich_listing_fair_price
 
@@ -99,6 +100,7 @@ def run_once(cfg: cfg_mod.Config, *, enrich: bool = False, max_items: int | None
                         enrich_listing_fair_price(listing, repo.conn)
                     except Exception as e:
                         log.debug("fair_price skipped for %s: %s", listing.source_id, e)
+                    extract_features(listing)
                     score, reasons = score_listing(listing)
                     listing.score = score
                     listing.score_reasons = reasons

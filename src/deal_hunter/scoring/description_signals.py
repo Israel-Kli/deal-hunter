@@ -1,8 +1,7 @@
-"""Text signals from listing description + tags for heuristic scoring."""
-
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from deal_hunter.models import Listing
 from deal_hunter.normalize.hebrew import strip_niqqud
@@ -11,7 +10,6 @@ _HEB_CHAR = re.compile(r"[\u0590-\u05FF]")
 
 
 def _standalone_word(text: str, word: str) -> bool:
-    """True if ``word`` appears at least once with no Hebrew letter immediately before/after."""
     for m in re.finditer(re.escape(word), text):
         before = text[m.start() - 1] if m.start() > 0 else " "
         after = text[m.end()] if m.end() < len(text) else " "
@@ -41,10 +39,19 @@ _GARDEN_MARKERS = (
 )
 
 
-def multi_unit_bonus_and_matches(text: str) -> tuple[float, list[str]]:
-    """Positive adjustment (capped): phrases + standalone יחידות/יחידה (same rules as dashboard highlights)."""
+def multi_unit_bonus_and_matches(
+    text: str, effective_units: int | None = None
+) -> tuple[float, list[str], str]:
     matched: list[str] = []
     bonus = 0.0
+    source: str = "description"
+
+    if effective_units is not None and effective_units >= 2:
+        bonus = min(1.5, 0.5 * (effective_units - 1))
+        matched.append(f"{effective_units} יחידות (מפורש)")
+        source = "structured"
+        return bonus, matched, source
+
     t = text
     if "יחידות דיור" in t:
         matched.append("יחידות דיור")
@@ -68,15 +75,53 @@ def multi_unit_bonus_and_matches(text: str) -> tuple[float, list[str]]:
         matched.append("יחידה")
         bonus += 0.22
     cap = 1.0
-    return min(cap, bonus), matched
+    return min(cap, bonus), matched, source
 
 
-def garden_bonus_and_matches(text: str) -> tuple[float, list[str]]:
-    found = [m for m in _GARDEN_MARKERS if m in text]
+def garden_bonus_and_matches(
+    text: str,
+    effective_lot_sqm: int | None = None,
+    effective_garden_sqm: int | None = None,
+) -> tuple[float, list[str], str]:
+    found = []
+    source = "description"
+
+    lot = effective_lot_sqm
+    garden = effective_garden_sqm
+
+    sqm_val = None
+    sqm_label = ""
+    if lot is not None and lot > 0:
+        sqm_val = lot
+        sqm_label = "מגרש"
+    if garden is not None and garden > 0:
+        if sqm_val is None or garden > (sqm_val or 0):
+            sqm_val = garden
+            sqm_label = "גינה"
+        else:
+            pass
+
+    if sqm_val is not None:
+        sqm_val = max(sqm_val, 0)
+        if sqm_val <= 50:
+            raw = 0.0
+        elif sqm_val <= 150:
+            raw = 0.4 * (sqm_val - 50) / 100
+        elif sqm_val <= 400:
+            raw = 0.4 + 0.4 * (sqm_val - 150) / 250
+        else:
+            raw = 0.8
+        found.append(f"{sqm_label} {sqm_val} מ\"ר")
+        source = "structured"
+        return raw, found, source
+
+    for m in _GARDEN_MARKERS:
+        if m in text:
+            found.append(m)
     if not found:
-        return 0.0, []
+        return 0.0, [], source
     raw = min(0.42, 0.14 * len(found))
-    return raw, found
+    return raw, found, source
 
 
 def room_count_bonus(rooms: float | None) -> float:
@@ -86,12 +131,21 @@ def room_count_bonus(rooms: float | None) -> float:
     return min(0.48, ((rooms - 4.5) / span) * 0.48)
 
 
-def outdoor_and_rooms_bonus(listing: Listing, text: str) -> tuple[float, dict[str, object]]:
-    g_pts, g_hit = garden_bonus_and_matches(text)
+def outdoor_and_rooms_bonus(
+    listing: Listing,
+    text: str,
+    effective_lot_sqm: int | None = None,
+    effective_garden_sqm: int | None = None,
+) -> tuple[float, dict[str, object]]:
+    g_pts, g_hit, g_src = garden_bonus_and_matches(
+        text, effective_lot_sqm, effective_garden_sqm
+    )
     r_pts = room_count_bonus(listing.rooms)
-    combined = min(0.78, g_pts + r_pts)
+    cap = 0.95
+    combined = min(cap, g_pts + r_pts)
     detail: dict[str, object] = {
         "garden_bonus": round(g_pts, 3),
+        "garden_bonus_source": g_src,
         "room_layout_bonus": round(r_pts, 3),
         "outdoor_rooms_bonus": round(combined, 3),
     }

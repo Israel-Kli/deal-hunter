@@ -1,15 +1,13 @@
-"""Heuristic investment scorer.
-
-Components: smooth price-vs-market, description-based multi-unit bonus,
-garden + room-count bonus (capped), amenities (parking, balcony, renovated),
-seller channel (private vs agent), price-drop ramp, liquidity risk on very
-high price. Output: score in [1, 10] and a reasons dict.
-"""
-
 from __future__ import annotations
 
 from typing import Any
 
+from deal_hunter.effective import (
+    effective_garden_sqm,
+    effective_lot_sqm,
+    effective_price_per_sqm,
+    effective_units,
+)
 from deal_hunter.models import Listing
 from deal_hunter.scoring.description_signals import (
     combined_search_text,
@@ -72,9 +70,13 @@ def score_listing(listing: Listing) -> tuple[float, dict[str, Any]]:
     reasons: dict[str, Any] = {}
 
     price = listing.price
-    ppsqm = float(listing.price_per_sqm or 0)
+    ppsqm = float(effective_price_per_sqm(listing) or 0)
     city = listing.city
     neighborhood = listing.neighborhood
+
+    e_units = effective_units(listing)
+    e_lot = effective_lot_sqm(listing)
+    e_garden = effective_garden_sqm(listing)
 
     if listing.fair_price_estimate and listing.sqm and listing.sqm > 0:
         fair_ppsqm = listing.fair_price_estimate / listing.sqm
@@ -92,21 +94,31 @@ def score_listing(listing: Listing) -> tuple[float, dict[str, Any]]:
         score += delta
         reasons["price_vs_market"] = label
         reasons["price_vs_market_delta"] = round(delta, 2)
+        reasons["price_per_sqm_used"] = int(ppsqm)
 
     text = combined_search_text(listing)
-    unit_bon, unit_matches = multi_unit_bonus_and_matches(text)
+    unit_bon, unit_matches, unit_src = multi_unit_bonus_and_matches(text, e_units)
     if unit_bon > 0:
         score += unit_bon
         reasons["description_unit_hit"] = True
         reasons["matched_unit_phrases"] = unit_matches
         reasons["description_unit_adjustment"] = round(unit_bon, 2)
+        reasons["description_unit_source"] = unit_src
+        if e_units is not None:
+            reasons["units_count_used"] = e_units
     else:
         reasons["description_unit_hit"] = False
 
-    out_bonus, out_detail = outdoor_and_rooms_bonus(listing, text)
+    out_bonus, out_detail = outdoor_and_rooms_bonus(
+        listing, text, e_lot, e_garden
+    )
     if out_bonus > 0:
         score += out_bonus
         reasons.update(out_detail)
+    if e_lot is not None:
+        reasons["lot_sqm_used"] = e_lot
+    if e_garden is not None:
+        reasons["garden_sqm_used"] = e_garden
 
     amen = 0.0
     if listing.parking:
