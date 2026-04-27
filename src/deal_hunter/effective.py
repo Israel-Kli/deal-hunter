@@ -41,20 +41,6 @@ def effective_units(obj: dict[str, Any] | Any) -> int | None:
     return u_u if u_u is not None else u
 
 
-def effective_lot_sqm(obj: dict[str, Any] | Any) -> int | None:
-    l = (
-        getattr(obj, "lot_sqm", None)
-        if not isinstance(obj, dict)
-        else obj.get("lot_sqm")
-    )
-    l_u = (
-        getattr(obj, "lot_sqm_user", None)
-        if not isinstance(obj, dict)
-        else obj.get("lot_sqm_user")
-    )
-    return l_u if l_u is not None else l
-
-
 def effective_garden_sqm(obj: dict[str, Any] | Any) -> int | None:
     g = (
         getattr(obj, "garden_sqm", None)

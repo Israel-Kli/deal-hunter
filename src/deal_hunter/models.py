@@ -70,13 +70,11 @@ class Listing(BaseModel):
     user_notes: str = ""
 
     units_count: int | None = None
-    lot_sqm: int | None = None
     garden_sqm: int | None = None
 
     sqm_user: int | None = None
     sqm_build_user: int | None = None
     units_count_user: int | None = None
-    lot_sqm_user: int | None = None
     garden_sqm_user: int | None = None
 
 

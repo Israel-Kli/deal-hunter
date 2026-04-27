@@ -27,19 +27,7 @@ def test_units_count_extracted():
 def test_units_count_singular():
     l = _listing("יחידת דיור אחת")
     extract_features(l)
-    assert l.units_count is None  # 1 not 2+, matches only "1+ יחידות דיור"
-
-
-def test_lot_sqm_extracted():
-    l = _listing("מגרש 350 מ\"ר, בית פרטי")
-    extract_features(l)
-    assert l.lot_sqm == 350
-
-
-def test_lot_sqm_with_hebrew_quote():
-    l = _listing("מגרש 400 מ״ר עם גינה")
-    extract_features(l)
-    assert l.lot_sqm == 400
+    assert l.units_count is None
 
 
 def test_garden_sqm_extracted():
@@ -64,7 +52,6 @@ def test_no_false_positive():
     l = _listing("דירה נחמדה עם מטבח גדול")
     extract_features(l)
     assert l.units_count is None
-    assert l.lot_sqm is None
     assert l.garden_sqm is None
 
 
@@ -75,8 +62,8 @@ def test_tags_also_searched():
         url="https://example.com/tags",
         price=1_000_000,
         description="",
-        tags=["3 יחידות דיור", "מגרש 200 מ״ר"],
+        tags=["3 יחידות דיור", "גינה 200 מ״ר"],
     )
     extract_features(l)
     assert l.units_count == 3
-    assert l.lot_sqm == 200
+    assert l.garden_sqm == 200

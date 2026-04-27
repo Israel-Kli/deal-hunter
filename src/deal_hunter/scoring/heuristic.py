@@ -4,7 +4,6 @@ from typing import Any
 
 from deal_hunter.effective import (
     effective_garden_sqm,
-    effective_lot_sqm,
     effective_price_per_sqm,
     effective_units,
 )
@@ -75,7 +74,6 @@ def score_listing(listing: Listing) -> tuple[float, dict[str, Any]]:
     neighborhood = listing.neighborhood
 
     e_units = effective_units(listing)
-    e_lot = effective_lot_sqm(listing)
     e_garden = effective_garden_sqm(listing)
 
     if listing.fair_price_estimate and listing.sqm and listing.sqm > 0:
@@ -110,13 +108,11 @@ def score_listing(listing: Listing) -> tuple[float, dict[str, Any]]:
         reasons["description_unit_hit"] = False
 
     out_bonus, out_detail = outdoor_and_rooms_bonus(
-        listing, text, e_lot, e_garden
+        listing, text, e_garden
     )
     if out_bonus > 0:
         score += out_bonus
         reasons.update(out_detail)
-    if e_lot is not None:
-        reasons["lot_sqm_used"] = e_lot
     if e_garden is not None:
         reasons["garden_sqm_used"] = e_garden
 

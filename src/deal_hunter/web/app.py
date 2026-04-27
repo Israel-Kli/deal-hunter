@@ -12,7 +12,6 @@ from deal_hunter.config import Config
 from deal_hunter.dedup.canonicalizer import load_existing_groups
 from deal_hunter.effective import (
     effective_garden_sqm,
-    effective_lot_sqm,
     effective_price_per_sqm,
     effective_sqm,
     effective_sqm_build,
@@ -168,7 +167,7 @@ def _make_handler(cfg: Config):
                         self._write_json(404, {"status": "error", "error": "Listing not found"})
                         return
                     overrides: dict = {}
-                    for col in ("sqm_user", "sqm_build_user", "units_count_user", "lot_sqm_user", "garden_sqm_user"):
+                    for col in ("sqm_user", "sqm_build_user", "units_count_user", "garden_sqm_user"):
                         if col in data:
                             val = data[col]
                             if val is not None:
@@ -215,10 +214,8 @@ def _make_handler(cfg: Config):
                         sqm_user=row.get("sqm_user"),
                         sqm_build_user=row.get("sqm_build_user"),
                         units_count_user=row.get("units_count_user"),
-                        lot_sqm_user=row.get("lot_sqm_user"),
                         garden_sqm_user=row.get("garden_sqm_user"),
                         units_count=row.get("units_count"),
-                        lot_sqm=row.get("lot_sqm"),
                         garden_sqm=row.get("garden_sqm"),
                     )
                     new_score, new_reasons = score_listing(listing_for_score)
@@ -235,7 +232,6 @@ def _make_handler(cfg: Config):
                     "sqm_eff": effective_sqm(row),
                     "sqm_build_eff": effective_sqm_build(row),
                     "units_count_eff": effective_units(row),
-                    "lot_sqm_eff": effective_lot_sqm(row),
                     "garden_sqm_eff": effective_garden_sqm(row),
                     "price_per_sqm_eff": effective_price_per_sqm(row),
                 }, ensure_ascii=False).encode("utf-8")
