@@ -58,11 +58,13 @@ CREATE TABLE IF NOT EXISTS listings (
 
     units_count     INTEGER,
     garden_sqm      INTEGER,
+    lot_sqm         INTEGER,
 
     sqm_user        INTEGER,
     sqm_build_user  INTEGER,
     units_count_user INTEGER,
     garden_sqm_user INTEGER,
+    lot_sqm_user    INTEGER,
 
     PRIMARY KEY (source, source_id)
 );

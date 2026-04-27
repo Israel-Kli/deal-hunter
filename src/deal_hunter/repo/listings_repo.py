@@ -47,10 +47,10 @@ class ListingsRepo:
             self.conn.execute("ALTER TABLE listings ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0")
         if "user_notes" not in columns:
             self.conn.execute("ALTER TABLE listings ADD COLUMN user_notes TEXT NOT NULL DEFAULT ''")
-        for col in ("units_count", "garden_sqm"):
+        for col in ("units_count", "garden_sqm", "lot_sqm"):
             if col not in columns:
                 self.conn.execute(f"ALTER TABLE listings ADD COLUMN {col} INTEGER")
-        for col in ("sqm_user", "sqm_build_user", "units_count_user", "garden_sqm_user"):
+        for col in ("sqm_user", "sqm_build_user", "units_count_user", "garden_sqm_user", "lot_sqm_user"):
             if col not in columns:
                 self.conn.execute(f"ALTER TABLE listings ADD COLUMN {col} INTEGER")
 
@@ -119,8 +119,8 @@ class ListingsRepo:
                 fair_price_estimate, fair_price_low, fair_price_high,
                 score, score_reasons, source_payload,
                 is_favorite, user_notes,
-                units_count, garden_sqm,
-                sqm_user, sqm_build_user, units_count_user, garden_sqm_user
+                units_count, garden_sqm, lot_sqm,
+                sqm_user, sqm_build_user, units_count_user, garden_sqm_user, lot_sqm_user
             ) VALUES (
                 ?,?,?, ?,?,?,?,?,
                 ?,?,?,?,
@@ -132,8 +132,8 @@ class ListingsRepo:
                 ?,
                 ?,?,?,
                 ?,?,?,
-                ?,?,
-                ?,?,
+                ?,?,?,
+                ?,?,?,
                 ?,?,?,?
             )
             ON CONFLICT(source, source_id) DO UPDATE SET
@@ -174,7 +174,8 @@ class ListingsRepo:
                 score_reasons=excluded.score_reasons,
                 source_payload=excluded.source_payload,
                 units_count=excluded.units_count,
-                garden_sqm=excluded.garden_sqm
+                garden_sqm=excluded.garden_sqm,
+                lot_sqm=excluded.lot_sqm
             """,
             (
                 listing.source, listing.source_id, listing.url,
@@ -198,9 +199,10 @@ class ListingsRepo:
                 json.dumps(listing.source_payload, ensure_ascii=False),
                 0,
                 "",
-                listing.units_count, listing.garden_sqm,
+                listing.units_count, listing.garden_sqm, listing.lot_sqm,
                 listing.sqm_user, listing.sqm_build_user,
                 listing.units_count_user, listing.garden_sqm_user,
+                listing.lot_sqm_user,
             ),
         )
         self.conn.execute(
@@ -221,6 +223,7 @@ class ListingsRepo:
         sqm_build_user: int | None = _UNSET,
         units_count_user: int | None = _UNSET,
         garden_sqm_user: int | None = _UNSET,
+        lot_sqm_user: int | None = _UNSET,
     ) -> bool:
         """Update dashboard-only fields including overrides.
         Pass a value to set, None to clear override, omit to leave unchanged.
@@ -239,6 +242,7 @@ class ListingsRepo:
             "sqm_build_user": sqm_build_user,
             "units_count_user": units_count_user,
             "garden_sqm_user": garden_sqm_user,
+            "lot_sqm_user": lot_sqm_user,
         }
         for col, val in override_map.items():
             if val is not _UNSET:

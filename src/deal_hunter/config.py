@@ -41,6 +41,10 @@ class SourcesCfg(BaseModel):
     madlan: bool = False
     onmap: bool = False
     ad: bool = False
+    reariel: bool = False
+    spectra: bool = False
+    nadlanh: bool = False
+    simplestate: bool = False
 
 
 class CompsCfg(BaseModel):
