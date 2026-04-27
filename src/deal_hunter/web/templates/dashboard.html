@@ -135,7 +135,7 @@
     מוכר — פרטי עדיף על תיווך |
     מו״מ — ירידת מחיר |
     סיכון — מחיר גבוה מאוד (נזילות) |
-    <b>לחץ על תא מ״ר/יחידות/מגרש/גינה לעריכה</b>
+    <b>לחץ על תא מגרש/בנוי/יחידות/גינה לעריכה</b>
   </div>
   <table>
     <thead>
@@ -149,13 +149,12 @@
         <th class="col-type">סוג</th>
         <th class="col-desc">תיאור</th>
         <th class="col-num sort" data-key="rooms">חדרים</th>
-        <th class="col-num sort" data-key="sqm_eff">מ"ר (אפקטיבי)</th>
+        <th class="col-num sort" data-key="sqm_eff">מגרש</th>
         <th class="col-num sort" data-key="sqm_build_eff">מ"ר בנוי</th>
         <th class="col-num sort" data-key="units_count_eff">יחידות דיור</th>
-        <th class="col-num sort" data-key="lot_sqm_eff">מגרש (מ״ר)</th>
         <th class="col-num sort" data-key="garden_sqm_eff">גינה (מ״ר)</th>
         <th class="col-price sort" data-key="price">מחיר</th>
-        <th class="col-ppsqm sort" data-key="price_per_sqm_eff">₪/מ"ר אפקטיבי</th>
+        <th class="col-ppsqm sort" data-key="price_per_sqm_eff">₪/מ"ר</th>
       </tr>
     </thead>
     <tbody id="rows"></tbody>
@@ -234,7 +233,6 @@ function fmtScoreReasons(reasons) {
     room_layout_bonus: 'בונוס חדרים',
     outdoor_rooms_bonus: 'סה״כ גינה+חדרים',
     matched_garden_phrases: 'ביטויי גינה',
-    lot_sqm_used: 'מגרש (מ״ר)',
     garden_sqm_used: 'גינה (מ״ר)',
     final: 'ציון סופי',
   };
@@ -658,13 +656,12 @@ function render() {
       '<td class="col-num">' + editCellHtml(l, 'sqm', 'sqm_eff', 'sqm') + '</td>' +
       '<td class="col-num">' + editCellHtml(l, 'sqm_build', 'sqm_build_eff', 'sqm_build') + '</td>' +
       '<td class="col-num">' + editCellHtml(l, 'units_count', 'units_count_eff', 'units_count') + '</td>' +
-      '<td class="col-num">' + editCellHtml(l, 'lot_sqm', 'lot_sqm_eff', 'lot_sqm') + '</td>' +
       '<td class="col-num">' + editCellHtml(l, 'garden_sqm', 'garden_sqm_eff', 'garden_sqm') + '</td>' +
       '<td class="col-price">₪' + (l.price || 0).toLocaleString() + '</td>' +
       '<td class="col-ppsqm">' + ppsqmEff + '</td>' +
       '</tr>';
   }).join('');
-  document.getElementById('rows').innerHTML = html || '<tr><td colspan="16" class="muted">אין תוצאות</td></tr>';
+  document.getElementById('rows').innerHTML = html || '<tr><td colspan="15" class="muted">אין תוצאות</td></tr>';
   document.querySelectorAll('th.sort').forEach(th => {
     th.classList.toggle('sort-asc', th.dataset.key === sortKey && sortAsc);
     th.classList.toggle('sort-desc', th.dataset.key === sortKey && !sortAsc);

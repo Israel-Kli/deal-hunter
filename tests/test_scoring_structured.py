@@ -38,14 +38,6 @@ def test_score_falls_back_to_description_when_units_null():
     assert reasons["description_unit_source"] == "description"
 
 
-def test_score_with_lot_sqm_override():
-    l = _listing(lot_sqm=250, lot_sqm_user=250)
-    sc, reasons = score_listing(l)
-    assert reasons.get("lot_sqm_used") == 250
-    assert reasons.get("garden_bonus_source") == "structured"
-    assert reasons.get("garden_bonus", 0) > 0
-
-
 def test_score_with_garden_sqm_override():
     l = _listing(garden_sqm=80, garden_sqm_user=80)
     sc, reasons = score_listing(l)
@@ -62,4 +54,4 @@ def test_score_no_structured_falls_back_to_phrase():
 def test_score_uses_effective_price_per_sqm():
     l = _listing(price=2_000_000, sqm=100, sqm_user=80)
     sc, reasons = score_listing(l)
-    assert reasons.get("price_per_sqm_used") == 25000  # 2M/80
+    assert reasons.get("price_per_sqm_used") == 25000

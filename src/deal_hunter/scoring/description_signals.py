@@ -80,26 +80,18 @@ def multi_unit_bonus_and_matches(
 
 def garden_bonus_and_matches(
     text: str,
-    effective_lot_sqm: int | None = None,
     effective_garden_sqm: int | None = None,
 ) -> tuple[float, list[str], str]:
     found = []
     source = "description"
 
-    lot = effective_lot_sqm
     garden = effective_garden_sqm
 
     sqm_val = None
     sqm_label = ""
-    if lot is not None and lot > 0:
-        sqm_val = lot
-        sqm_label = "מגרש"
     if garden is not None and garden > 0:
-        if sqm_val is None or garden > (sqm_val or 0):
-            sqm_val = garden
-            sqm_label = "גינה"
-        else:
-            pass
+        sqm_val = garden
+        sqm_label = "גינה"
 
     if sqm_val is not None:
         sqm_val = max(sqm_val, 0)
@@ -134,11 +126,10 @@ def room_count_bonus(rooms: float | None) -> float:
 def outdoor_and_rooms_bonus(
     listing: Listing,
     text: str,
-    effective_lot_sqm: int | None = None,
     effective_garden_sqm: int | None = None,
 ) -> tuple[float, dict[str, object]]:
     g_pts, g_hit, g_src = garden_bonus_and_matches(
-        text, effective_lot_sqm, effective_garden_sqm
+        text, effective_garden_sqm
     )
     r_pts = room_count_bonus(listing.rooms)
     cap = 0.95

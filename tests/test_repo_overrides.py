@@ -18,7 +18,6 @@ def _listing(**kw) -> Listing:
         sqm=100,
         sqm_build=80,
         units_count=2,
-        lot_sqm=200,
         garden_sqm=50,
         score=5.0,
         first_seen_at=datetime(2026, 1, 1, 12, 0, 0),
@@ -43,20 +42,18 @@ def test_upsert_preserves_override_sqm(tmp_path):
         assert row["sqm_build_user"] == 130
 
 
-def test_upsert_preserves_override_units_lot_garden(tmp_path):
+def test_upsert_preserves_override_units_garden(tmp_path):
     db = tmp_path / "t.db"
     with ListingsRepo(db) as repo:
         repo.upsert(_listing())
         repo.update_user_fields(
             "yad2", "ov1",
             units_count_user=4,
-            lot_sqm_user=350,
             garden_sqm_user=90,
         )
-        repo.upsert(_listing(units_count=2, lot_sqm=200, garden_sqm=50))
+        repo.upsert(_listing(units_count=2, garden_sqm=50))
         row = repo.get("yad2", "ov1")
         assert row["units_count_user"] == 4
-        assert row["lot_sqm_user"] == 350
         assert row["garden_sqm_user"] == 90
 
 
@@ -92,7 +89,6 @@ def test_all_for_dashboard_includes_eff_keys(tmp_path):
         assert r["sqm_eff"] == 150
         assert r["sqm_build_eff"] == 80
         assert r["units_count_eff"] == 2
-        assert r["lot_sqm_eff"] == 200
         assert r["garden_sqm_eff"] == 50
         assert r["price_per_sqm_eff"] is not None
 
@@ -102,8 +98,8 @@ def test_new_columns_migrated(tmp_path):
     repo = ListingsRepo(db)
     cur = repo.conn.execute("PRAGMA table_info(listings)")
     cols = {row["name"] for row in cur.fetchall()}
-    for col in ("units_count", "lot_sqm", "garden_sqm",
+    for col in ("units_count", "garden_sqm",
                 "sqm_user", "sqm_build_user", "units_count_user",
-                "lot_sqm_user", "garden_sqm_user"):
+                "garden_sqm_user"):
         assert col in cols, f"column {col} missing"
     repo.close()

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from deal_hunter.effective import (
     effective_garden_sqm,
-    effective_lot_sqm,
     effective_price_per_sqm,
     effective_sqm,
     effective_sqm_build,
@@ -47,11 +46,6 @@ def test_units_fallthrough():
     assert effective_units(d) == 2
 
 
-def test_lot_sqm_prefers_user():
-    d = {"lot_sqm": 200, "lot_sqm_user": 250}
-    assert effective_lot_sqm(d) == 250
-
-
 def test_garden_sqm_prefers_user():
     d = {"garden_sqm": 50, "garden_sqm_user": 80}
     assert effective_garden_sqm(d) == 80
@@ -59,7 +53,7 @@ def test_garden_sqm_prefers_user():
 
 def test_price_per_sqm_derived_from_effective_sqm():
     d = {"price": 1_000_000, "sqm": 100, "sqm_user": 80}
-    assert effective_price_per_sqm(d) == 12500  # 1M / 80
+    assert effective_price_per_sqm(d) == 12500
 
 
 def test_price_per_sqm_falls_back_to_stored():
