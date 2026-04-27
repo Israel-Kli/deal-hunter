@@ -293,6 +293,18 @@ class ListingsRepo:
             out.append(d)
         return out
 
+    def delete_listing(self, source: str, source_id: str) -> bool:
+        cur = self.conn.execute(
+            "DELETE FROM listings WHERE source=? AND source_id=?",
+            (source, source_id),
+        )
+        self.conn.execute(
+            "DELETE FROM price_history WHERE source=? AND source_id=?",
+            (source, source_id),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
     def purge_older_than(self, cutoff_iso: str) -> int:
         cur = self.conn.execute(
             "DELETE FROM listings WHERE first_seen_at < ? AND (publish_date = '' OR publish_date < ?)",
