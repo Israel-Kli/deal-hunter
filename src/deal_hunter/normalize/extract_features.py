@@ -20,14 +20,16 @@ def extract_features(listing: Listing) -> None:
     raw = " ".join(text_parts)
     text = strip_niqqud(raw).casefold()
 
-    m = _UNITS_RE.search(text)
-    if m:
-        val = int(m.group(1))
-        if val > 0:
-            listing.units_count = val
+    if listing.units_count is None:
+        m = _UNITS_RE.search(text)
+        if m:
+            val = int(m.group(1))
+            if val > 0:
+                listing.units_count = val
 
-    m = _GARDEN_RE.search(text)
-    if m:
-        val = int(m.group(1))
-        if 5 <= val <= 9999:
-            listing.garden_sqm = val
+    if listing.garden_sqm is None:
+        m = _GARDEN_RE.search(text)
+        if m:
+            val = int(m.group(1))
+            if 5 <= val <= 9999:
+                listing.garden_sqm = val

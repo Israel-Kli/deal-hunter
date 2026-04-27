@@ -61,6 +61,13 @@
   "scoring": {
     "alert_threshold": 7.0
   },
+  "ai_mapper": {
+    "enabled": false,
+    "model": "gemini-2.0-flash",
+    "batch_size": 20,
+    "timeout_sec": 20.0,
+    "api_key_env": "GEMINI_API_KEY"
+  },
   "dashboard_port": 8081,
   "data_dir": "data"
 }

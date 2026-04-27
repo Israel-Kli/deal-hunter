@@ -18,6 +18,7 @@ from deal_hunter.adapters.reariel import RearielAdapter
 from deal_hunter.adapters.simplestate import SimplestateAdapter
 from deal_hunter.adapters.spectra import SpectraAdapter
 from deal_hunter.adapters.yad2 import Yad2Adapter
+from deal_hunter.ai_mapper import extract_batch as ai_extract_batch
 from deal_hunter.dedup.canonicalizer import CanonicalGroup, dedup_batch, load_existing_groups
 from deal_hunter.models import Listing, ScanResult
 from deal_hunter.notify import telegram
@@ -128,7 +129,8 @@ def _scan_adapter(
     alert_queue: list[Listing] = []
     with ListingsRepo(db_path) as repo:
         try:
-            count = 0
+            # Phase 1: collect + enrich
+            listings: list[Listing] = []
             for listing in adapter.fetch_feed(SearchFilters()):
                 if enrich or getattr(adapter, "enrich_always", False):
                     try:
@@ -139,13 +141,27 @@ def _scan_adapter(
                     enrich_listing_fair_price(listing, repo.conn)
                 except Exception as e:
                     log.debug("fair_price skipped for %s: %s", listing.source_id, e)
+                listings.append(listing)
+                if max_items and len(listings) >= max_items:
+                    break
+
+            # Phase 2: AI batch extraction
+            if cfg.ai_mapper.enabled:
+                try:
+                    ai_calls = ai_extract_batch(listings, cfg.ai_mapper, repo)
+                    if ai_calls:
+                        log.debug("AI mapper %s: %d call(s)", adapter.source, ai_calls)
+                except Exception as e:
+                    log.warning("AI mapper failed for %s: %s", adapter.source, e)
+
+            # Phase 3: score + upsert
+            for listing in listings:
                 extract_features(listing)
                 score, reasons = score_listing(listing)
                 listing.score = score
                 listing.score_reasons = reasons
                 is_new, prev_price = repo.upsert(listing)
                 result.fetched += 1
-                count += 1
                 if is_new:
                     result.new += 1
                 else:
@@ -157,8 +173,6 @@ def _scan_adapter(
                             alert_queue.append(listing)
                 if is_new and score >= cfg.notifications.score_threshold:
                     alert_queue.append(listing)
-                if max_items and count >= max_items:
-                    break
         except Exception as e:
             log.exception("adapter %s failed", adapter.source)
             result.errors.append(str(e))

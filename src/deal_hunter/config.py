@@ -74,6 +74,15 @@ class ScoringCfg(BaseModel):
     alert_threshold: float = 7.0
 
 
+class AIMapperCfg(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = False
+    model: str = "gemini-2.0-flash"
+    batch_size: int = 20
+    timeout_sec: float = 20.0
+    api_key_env: str = "GEMINI_API_KEY"
+
+
 class Config(BaseModel):
     model_config = ConfigDict(extra="forbid")
     search: SearchCfg = Field(default_factory=SearchCfg)
@@ -83,6 +92,7 @@ class Config(BaseModel):
     schedule: ScheduleCfg = Field(default_factory=ScheduleCfg)
     notifications: NotificationsCfg = Field(default_factory=NotificationsCfg)
     scoring: ScoringCfg = Field(default_factory=ScoringCfg)
+    ai_mapper: AIMapperCfg = Field(default_factory=AIMapperCfg)
     dashboard_port: int = 8081
     dashboard_host: str = "127.0.0.1"
     data_dir: str = "data"
