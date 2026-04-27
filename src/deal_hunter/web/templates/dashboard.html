@@ -15,7 +15,7 @@
   .fav-btn { background:none; border:none; cursor:pointer; font-size:17px; line-height:1; padding:2px; color:#cbd5e1; }
   .fav-btn:hover { color:#94a3b8; }
   .fav-btn.fav-on { color:#ca8a04; }
-  th.col-del, td.col-del { width:1px; white-space:nowrap; padding:4px 0; text-align:center; vertical-align:middle; }
+  th.col-del, td.col-del { width:2.25rem; max-width:2.35rem; padding:4px 2px; text-align:center; vertical-align:middle; }
   .del-btn { background:none; border:none; cursor:pointer; font-size:13px; line-height:1; padding:2px; color:#cbd5e1; border-radius:3px; }
   .del-btn:hover { color:#ef4444; background:#fef2f2; }
   th.col-score, td.col-score { width:2.75rem; max-width:2.85rem; padding:4px 3px; text-align:center; }
@@ -149,13 +149,13 @@
         <th class="col-city">עיר</th>
         <th class="col-addr">כתובת</th>
         <th class="col-src sort" data-key="source">מקור</th>
-        <th class="col-date sort" data-key="first_listed_date">תאריך עלייה ראשונה</th>
+        <th class="col-date sort" data-key="first_listed_date">עלייה ראשונה</th>
         <th class="col-type">סוג</th>
         <th class="col-desc">תיאור</th>
-        <th class="col-num sort" data-key="rooms">חדרים</th>
+        <th class="col-num sort" data-key="rooms_eff">חדרים</th>
+        <th class="col-num sort" data-key="units_count_eff">יחידות דיור</th>
         <th class="col-num sort" data-key="sqm_eff">מגרש</th>
         <th class="col-num sort" data-key="sqm_build_eff">מ"ר בנוי</th>
-        <th class="col-num sort" data-key="units_count_eff">יחידות דיור</th>
         <th class="col-num sort" data-key="garden_sqm_eff">גינה (מ״ר)</th>
         <th class="col-price sort" data-key="price">מחיר</th>
         <th class="col-ppsqm sort" data-key="price_per_sqm_eff">₪/מ"ר</th>
@@ -414,7 +414,7 @@ function scheduleNoteSave(ta) {
   }, 650);
 }
 
-function editCellHtml(l, field, effField, scrapedField) {
+function editCellHtml(l, field, effField, scrapedField, decimal) {
   const val = l[effField];
   const scraped = l[scrapedField];
   const userField = field + '_user';
@@ -422,14 +422,16 @@ function editCellHtml(l, field, effField, scrapedField) {
   const tooltip = hasOverride ? ('ערך מקורי: ' + (scraped != null ? scraped : '—')) : 'לחץ לעריכה';
   const cls = 'edit-cell' + (hasOverride ? ' edit-override' : '');
   const badge = hasOverride ? '<span class="override-badge">✎</span>' : '';
-  return '<span class="' + cls + '" title="' + escapeHtml(tooltip) + '" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '" data-field="' + userField + '">' + badge + (val != null ? val : '—') + '</span>';
+  const decimalAttr = decimal ? ' data-decimal="1"' : '';
+  return '<span class="' + cls + '" title="' + escapeHtml(tooltip) + '" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '" data-field="' + userField + '"' + decimalAttr + '>' + badge + (val != null ? val : '—') + '</span>';
 }
 
 function startCellEdit(el) {
   if (editingCell) {
     cancelCellEdit(editingCell);
   }
-  const val = el.textContent.replace(/[^0-9]/g, '');
+  const isDecimal = el.dataset.decimal === '1';
+  const val = el.textContent.replace(isDecimal ? /[^0-9.]/g : /[^0-9]/g, '');
   const input = document.createElement('input');
   input.type = 'number';
   input.min = '0';
@@ -461,7 +463,8 @@ async function saveCellEdit(el) {
   const sourceId = input.dataset.sourceId;
   const field = input.dataset.field;
   const rawVal = input.value.trim();
-  const val = rawVal === '' ? null : parseInt(rawVal, 10);
+  const isDecimal = el.dataset.decimal === '1';
+  const val = rawVal === '' ? null : (isDecimal ? parseFloat(rawVal) : parseInt(rawVal, 10));
   if (rawVal !== '' && (isNaN(val) || val < 0)) { cancelCellEdit(el); return; }
   el.classList.remove('editing');
   editingCell = null;
@@ -472,6 +475,7 @@ async function saveCellEdit(el) {
     patchListingInAll(source, sourceId, {
       score: d.score,
       score_reasons: d.score_reasons,
+      rooms_eff: d.rooms_eff,
       sqm_eff: d.sqm_eff,
       sqm_build_eff: d.sqm_build_eff,
       units_count_eff: d.units_count_eff,
@@ -700,10 +704,10 @@ function render() {
       '<td class="col-date">' + (l.first_listed_date ? escapeHtml(l.first_listed_date) : '—') + '</td>' +
       '<td class="col-type">' + badge + '</td>' +
       '<td class="col-desc"><div class="desc-stack">' + notesEditor + '</div></td>' +
-      '<td class="col-num">' + (l.rooms ?? '—') + '</td>' +
+      '<td class="col-num">' + editCellHtml(l, 'rooms', 'rooms_eff', 'rooms', true) + '</td>' +
+      '<td class="col-num">' + editCellHtml(l, 'units_count', 'units_count_eff', 'units_count') + '</td>' +
       '<td class="col-num">' + editCellHtml(l, 'sqm', 'sqm_eff', 'sqm') + '</td>' +
       '<td class="col-num">' + editCellHtml(l, 'sqm_build', 'sqm_build_eff', 'sqm_build') + '</td>' +
-      '<td class="col-num">' + editCellHtml(l, 'units_count', 'units_count_eff', 'units_count') + '</td>' +
       '<td class="col-num">' + editCellHtml(l, 'garden_sqm', 'garden_sqm_eff', 'garden_sqm') + '</td>' +
       '<td class="col-price">₪' + (l.price || 0).toLocaleString() + '</td>' +
       '<td class="col-ppsqm">' + ppsqmEff + '</td>' +

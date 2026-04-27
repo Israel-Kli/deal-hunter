@@ -158,33 +158,38 @@ class SimplestateAdapter:
 
     def _parse(self, item: dict[str, Any], biz_id: int) -> tuple[Listing | None, str | None]:
         s = self.search
+        prop_id = item.get("id")
 
         # Only "מכירה" (for-sale)
         deal_type = item.get("deal_type") or ""
         if deal_type != "מכירה":
             return None, "not_for_sale"
 
-        prop_id = item.get("id")
         if not prop_id:
             return None, "no_id"
 
         # Price
         raw_price = item.get("price")
         if raw_price is False or raw_price is None or not isinstance(raw_price, (int, float)) or raw_price <= 0:
+            log.debug("Simplestate filtered: reason=bad_price prop_id=%s price=%s", prop_id, raw_price)
             return None, "bad_price"
         price = int(raw_price)
 
         if s.get("price_min") and price < s["price_min"]:
+            log.debug("Simplestate filtered: reason=price_out_of_range prop_id=%s price=%d min=%s", prop_id, price, s["price_min"])
             return None, "price_out_of_range"
         if s.get("price_max") and price > s["price_max"]:
+            log.debug("Simplestate filtered: reason=price_out_of_range prop_id=%s price=%d max=%s", prop_id, price, s["price_max"])
             return None, "price_out_of_range"
 
         # Rooms
         rooms = item.get("rooms")
         if isinstance(rooms, (int, float)):
             if s.get("rooms_min") and float(rooms) < s["rooms_min"]:
+                log.debug("Simplestate filtered: reason=rooms_out_of_range prop_id=%s rooms=%s min=%s", prop_id, rooms, s["rooms_min"])
                 return None, "rooms_out_of_range"
             if s.get("rooms_max") and float(rooms) > s["rooms_max"]:
+                log.debug("Simplestate filtered: reason=rooms_out_of_range prop_id=%s rooms=%s max=%s", prop_id, rooms, s["rooms_max"])
                 return None, "rooms_out_of_range"
             rooms_f = float(rooms)
         else:
@@ -208,6 +213,7 @@ class SimplestateAdapter:
         garden_sqm = _extract_garden_sqm(description)
 
         if s.get("min_sqm") and sqm_i and sqm_i < s["min_sqm"]:
+            log.debug("Simplestate filtered: reason=sqm_too_small prop_id=%s sqm=%s min=%s", prop_id, sqm_i, s["min_sqm"])
             return None, "sqm_too_small"
 
         # Parking
@@ -234,6 +240,8 @@ class SimplestateAdapter:
         tags: list[str] = []
         if listing_type:
             tags.append(listing_type)
+
+        log.debug("Simplestate parsed: prop_id=%s price=%d rooms=%s sqm=%s city=%s type=%s", prop_id, price, rooms_f, sqm_i, city, listing_type)
 
         return Listing(
             source="simplestate",

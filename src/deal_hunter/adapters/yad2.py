@@ -255,8 +255,11 @@ class Yad2Adapter:
                 item = _extract_item_from_json(data)
                 if item:
                     _apply_json_enrichment(listing, item)
+                    log.debug("Yad2 enrich JSON ok: token=%s desc_len=%d", token, len(listing.description or ""))
                     # Still return None — caller must do an HTML fetch for comps
                     return None
+                else:
+                    log.debug("Yad2 enrich: no item in JSON for token=%s", token)
         html_url = f"{BASE}/realestate/item/{slug}/{token}"
         html = fetch(html_url, as_json=False)
         if html:
@@ -270,11 +273,15 @@ class Yad2Adapter:
                 listing.parking = True
             if not listing.mamad and ('ממ"ד' in hl or "ממד" in hl):
                 listing.mamad = True
+            log.debug("Yad2 enrich HTML ok: token=%s html_len=%d", token, len(html))
+        else:
+            log.debug("Yad2 enrich HTML failed: token=%s", token)
         return html
 
 
 def _extract_items(data: dict[str, Any]) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
+    sections_found: list[str] = []
     for q in data.get("pageProps", {}).get("dehydratedState", {}).get("queries", []) or []:
         sd = q.get("state", {}).get("data", {})
         if not isinstance(sd, dict):
@@ -282,6 +289,7 @@ def _extract_items(data: dict[str, Any]) -> list[dict[str, Any]]:
         for key in ("private", "agency", "platinum", "items", "feed_items"):
             lst = sd.get(key)
             if isinstance(lst, list):
+                sections_found.append(key)
                 for it in lst:
                     if isinstance(it, dict) and it.get("token"):
                         it["_feed_section"] = key
@@ -293,6 +301,8 @@ def _extract_items(data: dict[str, Any]) -> list[dict[str, Any]]:
         if t and t not in seen:
             seen.add(t)
             out.append(it)
+    if sections_found:
+        log.debug("Yad2 _extract_items: sections=%s raw=%d unique=%d", sections_found, len(items), len(out))
     return out
 
 

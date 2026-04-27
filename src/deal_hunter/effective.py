@@ -55,6 +55,20 @@ def effective_garden_sqm(obj: dict[str, Any] | Any) -> int | None:
     return g_u if g_u is not None else g
 
 
+def effective_rooms(obj: dict[str, Any] | Any) -> float | None:
+    r = (
+        getattr(obj, "rooms", None)
+        if not isinstance(obj, dict)
+        else obj.get("rooms")
+    )
+    r_u = (
+        getattr(obj, "rooms_user", None)
+        if not isinstance(obj, dict)
+        else obj.get("rooms_user")
+    )
+    return r_u if r_u is not None else r
+
+
 def effective_price_per_sqm(obj: dict[str, Any] | Any) -> int | None:
     sqm = effective_sqm(obj)
     price = (

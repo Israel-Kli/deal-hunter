@@ -93,7 +93,7 @@ class SpectraAdapter:
             if isinstance(jsonld.get("floorSize"), dict):
                 fs = jsonld["floorSize"]
                 if fs.get("value"):
-                    listing.sqm = listing.sqm or int(fs["value"])
+                    listing.sqm = int(fs["value"])
             if jsonld.get("numberOfRooms"):
                 listing.rooms = listing.rooms or float(jsonld["numberOfRooms"])
             if jsonld.get("numberOfBedrooms"):
@@ -117,8 +117,17 @@ class SpectraAdapter:
                 if "מגרש" in label:
                     listing.lot_sqm = listing.lot_sqm or _first_int(value)
                 elif "שטח בנוי" in label:
-                    listing.sqm = listing.sqm or _first_int(value)
-                    listing.sqm_build = _first_int(value)
+                    listing.sqm = _first_int(value) or listing.sqm
+                    listing.sqm_build = _first_int(value) or listing.sqm_build
+                elif "חצר" in label or "מרפס" in label:
+                    garden_val = _first_int(value)
+                    if garden_val is not None and garden_val > 0:
+                        listing.garden_sqm = garden_val
+                    listing.balcony = True
+                elif "יחידות" in label:
+                    units_val = _first_int(value)
+                    if units_val is not None and units_val > 0:
+                        listing.units_count = units_val
 
         # ── Amenities from features wrap ──
         features = soup.select_one("#property-features-wrap")
@@ -165,16 +174,20 @@ class SpectraAdapter:
         price_el = card.select_one("ul.item-price-wrap li.item-price span.price")
         raw_price = price_el.get_text(strip=True) if price_el else ""
         if not raw_price:
+            log.debug("Spectra filtered: reason=no_price hz_id=%s", hz_id)
             return None, "no_price"
         try:
             price = int(re.sub(r"[^\d]", "", raw_price))
         except ValueError:
+            log.debug("Spectra filtered: reason=bad_price hz_id=%s raw=%s", hz_id, raw_price)
             return None, "bad_price"
 
         s = self.search
         if s.get("price_min") and price < s["price_min"]:
+            log.debug("Spectra filtered: reason=price_out_of_range hz_id=%s price=%d min=%s", hz_id, price, s["price_min"])
             return None, "price_out_of_range"
         if s.get("price_max") and price > s["price_max"]:
+            log.debug("Spectra filtered: reason=price_out_of_range hz_id=%s price=%d max=%s", hz_id, price, s["price_max"])
             return None, "price_out_of_range"
 
         # ---- Type ----
@@ -193,8 +206,10 @@ class SpectraAdapter:
             rooms_f = _first_float(rooms_el.get_text()) if rooms_el.get_text() else None
 
         if s.get("rooms_min") and rooms_f and rooms_f < s["rooms_min"]:
+            log.debug("Spectra filtered: reason=rooms_out_of_range hz_id=%s rooms=%s min=%s", hz_id, rooms_f, s["rooms_min"])
             return None, "rooms_out_of_range"
         if s.get("rooms_max") and rooms_f and rooms_f > s["rooms_max"]:
+            log.debug("Spectra filtered: reason=rooms_out_of_range hz_id=%s rooms=%s max=%s", hz_id, rooms_f, s["rooms_max"])
             return None, "rooms_out_of_range"
 
         # ---- Built sqm ----
@@ -204,6 +219,7 @@ class SpectraAdapter:
             sqm_i = _first_int(area_el.get_text())
 
         if s.get("min_sqm") and sqm_i and sqm_i < s["min_sqm"]:
+            log.debug("Spectra filtered: reason=sqm_too_small hz_id=%s sqm=%s min=%s", hz_id, sqm_i, s["min_sqm"])
             return None, "sqm_too_small"
 
         # ---- Floor ----
@@ -264,6 +280,8 @@ class SpectraAdapter:
 
         # ---- Address parts ----
         street, house_number, neighborhood, city = _parse_address(address)
+
+        log.debug("Spectra parsed: hz_id=%s price=%d rooms=%s sqm=%s city=%s type=%s", hz_id, price, rooms_f, sqm_i, city, listing_type)
 
         return Listing(
             source="spectra",
