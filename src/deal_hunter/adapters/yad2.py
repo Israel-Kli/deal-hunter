@@ -145,6 +145,7 @@ class Yad2Adapter:
         details = item.get("additionalDetails", {}) or {}
         rooms = details.get("roomsCount")
         if rooms is not None and not (s["rooms_min"] <= rooms <= s["rooms_max"]):
+            log.debug("Yad2 filtered: reason=rooms_out_of_range token=%s rooms=%s expected=[%s, %s]", token, rooms, s["rooms_min"], s["rooms_max"])
             return None, "rooms_out_of_range"
 
         # Property type filter (house-only: בית פרטי/קוטג', דו משפחתי)
@@ -153,16 +154,19 @@ class Yad2Adapter:
             prop = (details.get("property") or {})
             prop_text = prop.get("text", "")
             if prop_text not in allowed_types:
+                log.debug("Yad2 filtered: reason=property_type_filtered token=%s prop_text=%s allowed=%s", token, prop_text, allowed_types)
                 return None, "property_type_filtered"
 
         addr = item.get("address", {}) or {}
         house = addr.get("house", {}) or {}
         floor = house.get("floor")
         if s.get("exclude_ground_floor") and floor == 0:
+            log.debug("Yad2 filtered: reason=ground_floor token=%s", token)
             return None, "ground_floor"
 
         price = item.get("price")
         if not price or price < s["price_min"] or price > s["price_max"]:
+            log.debug("Yad2 filtered: reason=price_out_of_range token=%s price=%s expected=[%s, %s]", token, price, s["price_min"], s["price_max"])
             return None, "price_out_of_range"
 
         street = (addr.get("street", {}) or {}).get("text", "") or ""
@@ -170,6 +174,7 @@ class Yad2Adapter:
         city_name = (addr.get("city", {}) or {}).get("text", "") or ""
         expected_city = city.get("hebrew_name", city.get("name", ""))
         if expected_city and city_name != expected_city:
+            log.debug("Yad2 filtered: reason=city_mismatch token=%s city=%s expected=%s", token, city_name, expected_city)
             return None, "city_mismatch"
         house_num = str(house.get("number", "") or "")
         address_str = ", ".join(filter(None, [f"{street} {house_num}".strip(), neighborhood, city_name]))
@@ -178,6 +183,7 @@ class Yad2Adapter:
         sqm_build = (item.get("metaData", {}) or {}).get("squareMeterBuild")
         size = sqm_build or sqm_advertised
         if s.get("min_sqm") and size and size < s["min_sqm"]:
+            log.debug("Yad2 filtered: reason=sqm_too_small token=%s sqm=%s min_sqm=%s", token, size, s["min_sqm"])
             return None, "sqm_too_small"
 
         meta = item.get("metaData", {}) or {}
@@ -189,6 +195,7 @@ class Yad2Adapter:
         publish_date = _publish_date_from_images(images)
         max_age = s.get("max_listing_age_days", 30)
         if publish_date and publish_date < datetime.now() - timedelta(days=max_age):
+            log.debug("Yad2 filtered: reason=too_old token=%s publish_date=%s max_age=%d", token, publish_date.strftime("%Y-%m-%d") if publish_date else "?", max_age)
             return None, "too_old"
 
         tags_raw = item.get("tags", []) or []
@@ -200,6 +207,7 @@ class Yad2Adapter:
         price_per_sqm = round(price / size) if price and size and size > 0 else None
         coords = addr.get("coords", {}) or {}
 
+        log.debug("Yad2 parsed: token=%s price=%d rooms=%s sqm=%s city=%s neighborhood=%s", token, price, rooms, size, city_name, neighborhood)
         pub_s = publish_date.strftime("%Y-%m-%d") if publish_date else ""
         return Listing(
             source="yad2",

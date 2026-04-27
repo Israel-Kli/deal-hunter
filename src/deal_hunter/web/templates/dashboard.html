@@ -15,12 +15,12 @@
   .fav-btn { background:none; border:none; cursor:pointer; font-size:17px; line-height:1; padding:2px; color:#cbd5e1; }
   .fav-btn:hover { color:#94a3b8; }
   .fav-btn.fav-on { color:#ca8a04; }
-  th.col-del, td.col-del { width:2.25rem; max-width:2.35rem; padding:4px 2px; text-align:center; vertical-align:middle; }
+  th.col-del, td.col-del { width:1px; white-space:nowrap; padding:4px 0; text-align:center; vertical-align:middle; }
   .del-btn { background:none; border:none; cursor:pointer; font-size:13px; line-height:1; padding:2px; color:#cbd5e1; border-radius:3px; }
   .del-btn:hover { color:#ef4444; background:#fef2f2; }
   th.col-score, td.col-score { width:2.75rem; max-width:2.85rem; padding:4px 3px; text-align:center; }
   th.col-city, td.col-city { width:4.5rem; max-width:5.5rem; padding:4px 4px; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:middle; }
-  th.col-addr, td.col-addr { width:10%; min-width:88px; max-width:150px; }
+  th.col-addr, td.col-addr { width:5%; min-width:44px; max-width:75px; }
   td.col-addr { overflow-wrap:anywhere; word-wrap:break-word; }
   .addr-wrap { min-width:0; width:100%; }
   .addr-link { display:block; min-width:0; max-width:100%; color:#2563eb; text-decoration:none; font-size:11px; }
@@ -85,6 +85,7 @@
   .icon-btn:hover { background:#e0e7ff; text-decoration:none; }
   .icon-btn-source { padding:4px; }
   .icon-btn-source .src-favicon { display:block; width:18px; height:18px; object-fit:contain; }
+  .icon-btn-source .src-fallback { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:4px; font-size:10px; font-weight:700; color:#fff; line-height:1; }
   mark.desc-hit { background:#fde047; color:#111827; font-weight:700; padding:0 3px; border-radius:3px; }
   .desc-stack { min-width:0; display:flex; flex-direction:column; gap:4px; align-items:stretch; }
   .desc-stack.edit { gap:0; }
@@ -197,6 +198,27 @@ function sourceFaviconUrl(source) {
 function sourceSiteTitle(source) {
   const t = { yad2: 'Yad2', madlan: 'Madlan', onmap: 'OnMap', ad: 'ad.co.il' };
   return t[source] || source || 'מודעה';
+}
+function sourceFallbackColor(source) {
+  const c = { yad2:'#e74c3c', madlan:'#3b82f6', onmap:'#22c55e', ad:'#8b5cf6', reariel:'#ef4444', spectra:'#14b8a6', nadlanh:'#ec4899', simplestate:'#6b7280' };
+  return c[source] || '#9ca3af';
+}
+function sourceFallbackLetter(source) {
+  const l = { yad2:'Y', madlan:'M', onmap:'O', ad:'A', reariel:'R', spectra:'S', nadlanh:'N', simplestate:'S' };
+  return l[source] || (source ? source.charAt(0).toUpperCase() : '?');
+}
+function sourceIconHtml(source) {
+  const url = sourceFaviconUrl(source);
+  if (!url) return '<span class="src-fallback" style="background:' + sourceFallbackColor(source) + '">' + escapeHtml(sourceFallbackLetter(source)) + '</span>';
+  return '<img class="src-favicon" src="' + escapeHtml(url) + '" alt="" width="18" height="18" loading="lazy" referrerpolicy="no-referrer" decoding="async" data-source="' + escapeHtml(source) + '" onerror="handleFaviconError(this)">';
+}
+function handleFaviconError(img) {
+  const source = img.dataset.source;
+  const span = document.createElement('span');
+  span.className = 'src-fallback';
+  span.style.background = sourceFallbackColor(source);
+  span.textContent = sourceFallbackLetter(source);
+  img.replaceWith(span);
 }
 function streetOrMapLink(l) {
   const lat = parseFloat(l.lat);
@@ -663,10 +685,7 @@ function render() {
       '<span class="user-notes-note' + (notes ? ' has-notes' : '') + '">' + (notes ? escapeHtml(notes) : '') + '</span>';
     const addrFull = l.address || '';
     const addrShort = stripCityFromAddress(addrFull, l.city || '');
-    const faviconUrl = sourceFaviconUrl(l.source);
-    const srcImg = faviconUrl
-      ? '<img class="src-favicon" src="' + escapeHtml(faviconUrl) + '" alt="" width="18" height="18" loading="lazy" referrerpolicy="no-referrer" decoding="async" onerror="this.replaceWith(document.createTextNode(String.fromCharCode(8599)))">'
-      : String.fromCharCode(8599);
+    const srcImg = sourceIconHtml(l.source);
     const rb64 = encodeReasonsB64(l.score_reasons || {});
     const isFav = !!l.is_favorite;
     const favStar = isFav ? '★' : '☆';
