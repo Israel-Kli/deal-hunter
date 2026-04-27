@@ -11,7 +11,11 @@ from pathlib import Path
 from deal_hunter import config as cfg_mod
 from deal_hunter.adapters.base import SearchFilters
 from deal_hunter.adapters.ad import AdAdapter
+from deal_hunter.adapters.nadlanh import NadlanhAdapter
 from deal_hunter.adapters.onmap import OnMapAdapter
+from deal_hunter.adapters.reariel import RearielAdapter
+from deal_hunter.adapters.simplestate import SimplestateAdapter
+from deal_hunter.adapters.spectra import SpectraAdapter
 from deal_hunter.adapters.yad2 import Yad2Adapter
 from deal_hunter.dedup.canonicalizer import CanonicalGroup, dedup_batch, load_existing_groups
 from deal_hunter.models import Listing, ScanResult
@@ -74,6 +78,37 @@ def _adapters(cfg: cfg_mod.Config):
             )
         )
     # Madlan adapter still deferred (PerimeterX CAPTCHA).
+    if cfg.sources.reariel:
+        out.append(
+            RearielAdapter(
+                search=cfg.search.model_dump(),
+                request_delay_sec=cfg.schedule.delay_between_requests_sec,
+            )
+        )
+    if cfg.sources.spectra:
+        out.append(
+            SpectraAdapter(
+                search=cfg.search.model_dump(),
+                request_delay_sec=cfg.schedule.delay_between_requests_sec,
+            )
+        )
+    if cfg.sources.nadlanh:
+        out.append(
+            NadlanhAdapter(
+                search=cfg.search.model_dump(),
+                max_pages=cfg.schedule.max_pages,
+                request_delay_sec=cfg.schedule.delay_between_requests_sec,
+            )
+        )
+    if cfg.sources.simplestate:
+        out.append(
+            SimplestateAdapter(
+                business_ids=[877],  # מפתח העיר — Mafteach Ha'Ir
+                search=cfg.search.model_dump(),
+                page_size=100,
+                request_delay_sec=cfg.schedule.delay_between_requests_sec,
+            )
+        )
     return out
 
 

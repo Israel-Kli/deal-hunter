@@ -1,6 +1,6 @@
 {
   "search": {
-    "rooms_min": 6,
+    "rooms_min": 7,
     "rooms_max": 15,
     "price_min": 1800000,
     "price_max": 5500000,
@@ -36,7 +36,11 @@
     "yad2":   true,
     "madlan": false,
     "onmap":  true,
-    "ad":     true
+    "ad":     true,
+    "reariel": true,
+    "spectra": true,
+    "nadlanh": true,
+    "simplestate": true
   },
   "comps": {
     "yad2_deals": true,
