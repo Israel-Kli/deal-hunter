@@ -37,18 +37,54 @@ NADLANH_HEADERS = {
 }
 
 
-def _fetch_urllib(url: str, timeout: int = 30) -> str | None:
-    """GET with stdlib urllib (avoids curl_cffi TLS fingerprint that triggers Cloudflare 403)."""
-    req = Request(url, headers=NADLANH_HEADERS)
+def _fetch_urllib(url: str, timeout: int = 30, retries: int = 3) -> str | None:
+    """GET with stdlib urllib (avoids curl_cffi TLS fingerprint that triggers Cloudflare 403).
+
+    Retries on transient failures, falls back to curl_cffi on persistent failure.
+    """
+    last_err = None
+    for attempt in range(1, retries + 1):
+        try:
+            req = Request(url, headers=NADLANH_HEADERS)
+            with urlopen(req, timeout=timeout) as resp:
+                raw = resp.read()
+                status = resp.getcode()
+                if status == 403:
+                    log.warning("nadlanh fetch 403 (attempt %d/%d): %s", attempt, retries, url)
+                    last_err = Exception(f"HTTP 403")
+                    if attempt < retries:
+                        time.sleep(2 * attempt)
+                    continue
+                if resp.headers.get("Content-Encoding") == "gzip":
+                    raw = gzip.decompress(raw)
+                text = raw.decode("utf-8", errors="replace")
+                if "cf-browser-verification" in text or "cf-challenge" in text:
+                    log.warning("nadlanh Cloudflare challenge (attempt %d/%d): %s", attempt, retries, url)
+                    last_err = Exception("Cloudflare challenge")
+                    if attempt < retries:
+                        time.sleep(3 * attempt)
+                    continue
+                return text
+        except Exception as e:
+            log.warning("nadlanh fetch error (attempt %d/%d) %s: %s", attempt, retries, url, e)
+            last_err = e
+            if attempt < retries:
+                time.sleep(2 * attempt)
+
+    # Fallback: try curl_cffi (might get 403 but sometimes works on different IPs)
     try:
-        with urlopen(req, timeout=timeout) as resp:
-            raw = resp.read()
-            if resp.headers.get("Content-Encoding") == "gzip":
-                raw = gzip.decompress(raw)
-            return raw.decode("utf-8", errors="replace")
+        from deal_hunter.http_client import fetch as curl_fetch
+        raw = curl_fetch(url, as_json=False, headers=NADLANH_HEADERS)
+        if isinstance(raw, str) and raw:
+            if "cf-browser-verification" not in raw and "cf-challenge" not in raw:
+                log.info("nadlanh: curl_cffi fallback succeeded for %s", url)
+                return raw
+            log.warning("nadlanh: curl_cffi fallback got Cloudflare challenge for %s", url)
     except Exception as e:
-        log.warning("nadlanh fetch %s: %s", url, e)
-        return None
+        log.warning("nadlanh: curl_cffi fallback also failed for %s: %s", url, e)
+
+    log.error("nadlanh fetch failed after %d retries for %s: %s", retries, url, last_err)
+    return None
 
 
 class NadlanhAdapter:

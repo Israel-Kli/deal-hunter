@@ -33,6 +33,7 @@ REARIEL_HEADERS = {
 
 class RearielAdapter:
     source = "reariel"
+    enrich_always = True  # card blurbs are truncated; detail page has full description
 
     def __init__(
         self,
@@ -90,7 +91,8 @@ class RearielAdapter:
             desc = rich.get_text(separator="\n", strip=True)
             if desc:
                 listing.description = desc
-                listing.lot_sqm = listing.lot_sqm or _extract_lot_sqm(desc)
+                listing.lot_sqm = _extract_lot_sqm(desc)
+                listing.garden_sqm = listing.garden_sqm or _extract_garden_sqm(desc)
 
         # Tags from detail page
         tags_wrapper = soup.select_one(".tags-wrapper")

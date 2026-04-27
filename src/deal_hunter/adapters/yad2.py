@@ -6,6 +6,7 @@ Restructured to fit the ScraperAdapter protocol and the canonical Listing model.
 
 from __future__ import annotations
 
+import html as _html
 import json
 import logging
 import random
@@ -263,16 +264,7 @@ class Yad2Adapter:
         html_url = f"{BASE}/realestate/item/{slug}/{token}"
         html = fetch(html_url, as_json=False)
         if html:
-            m = re.search(r'<meta\s+name=["\']description["\']\s+content=["\']([^"\']+)["\']', html, re.IGNORECASE)
-            if m:
-                listing.description = m.group(1).strip()
-            hl = html.lower()
-            if not listing.elevator and "מעלית" in hl:
-                listing.elevator = True
-            if not listing.parking and ("חנייה" in hl or "חניה" in hl):
-                listing.parking = True
-            if not listing.mamad and ('ממ"ד' in hl or "ממד" in hl):
-                listing.mamad = True
+            _enrich_from_html(listing, html)
             log.debug("Yad2 enrich HTML ok: token=%s html_len=%d", token, len(html))
         else:
             log.debug("Yad2 enrich HTML failed: token=%s", token)
@@ -388,7 +380,7 @@ def _apply_json_enrichment(listing: Listing, item: dict[str, Any]) -> None:
         meta = item.get("metaData", {}) or {}
         desc = meta.get("description", "") or meta.get("text", "")
     if desc:
-        listing.description = desc.strip()
+        listing.description = _html.unescape(desc.strip())
 
     in_prop = item.get("inProperty", {})
     if isinstance(in_prop, dict):
@@ -405,3 +397,63 @@ def _apply_json_enrichment(listing: Listing, item: dict[str, Any]) -> None:
     if not listing.balcony and "מרפסת" in blob: listing.balcony = True
     if not listing.ac and ("מיזוג" in blob or "מזגן" in blob): listing.ac = True
     if not listing.renovated and ("משופצ" in blob or "שיפוץ" in blob): listing.renovated = True
+
+
+def _enrich_from_html(listing: Listing, html: str) -> None:
+    desc = ""
+    for pattern in (
+        # name before content
+        r'<meta\s+name=["\']description["\']\s+content=["\']([^"\']+)["\']',
+        # content before name
+        r'<meta\s+content=["\']([^"\']+)["\']\s+name=["\']description["\']',
+        # og:description property before content
+        r'<meta\s+property=["\']og:description["\']\s+content=["\']([^"\']+)["\']',
+        # og:description content before property
+        r'<meta\s+content=["\']([^"\']+)["\']\s+property=["\']og:description["\']',
+    ):
+        m = re.search(pattern, html, re.IGNORECASE)
+        if m:
+            raw = m.group(1).strip()
+            desc = _html.unescape(raw)
+            break
+
+    # Parse __NEXT_DATA__ for structured enrichment (inProperty) + description fallback
+    nd_m = re.search(r'<script\s+id="__NEXT_DATA__"[^>]*>\s*(.*?)\s*</script>', html, re.DOTALL)
+    if nd_m:
+        try:
+            nd = json.loads(nd_m.group(1))
+            for q in nd.get("props", {}).get("pageProps", {}).get("dehydratedState", {}).get("queries", []) or []:
+                sd = q.get("state", {}).get("data", {})
+                if isinstance(sd, dict) and sd.get("token") == listing.source_id:
+                    in_prop = sd.get("inProperty", {})
+                    if isinstance(in_prop, dict):
+                        if in_prop.get("includeElevator"):     listing.elevator = True
+                        if in_prop.get("includeParking"):      listing.parking = True
+                        if in_prop.get("includeSecurityRoom"): listing.mamad = True
+                        if in_prop.get("includeBalcony"):      listing.balcony = True
+                        if in_prop.get("includeAirconditioner"): listing.ac = True
+                    if not desc:
+                        meta = sd.get("metaData", {}) or {}
+                        md = meta.get("description", "") or meta.get("text", "")
+                        if md:
+                            desc = _html.unescape(md.strip())
+                    break
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+
+    if desc:
+        listing.description = desc
+
+    hl = html.lower()
+    if not listing.elevator and "מעלית" in hl:
+        listing.elevator = True
+    if not listing.parking and ("חנייה" in hl or "חניה" in hl):
+        listing.parking = True
+    if not listing.mamad and ('ממ"ד' in hl or "ממד" in hl):
+        listing.mamad = True
+    if not listing.balcony and "מרפסת" in hl:
+        listing.balcony = True
+    if not listing.ac and ("מיזוג" in hl or "מזגן" in hl):
+        listing.ac = True
+    if not listing.renovated and ("משופצ" in hl or "שיפוץ" in hl):
+        listing.renovated = True
