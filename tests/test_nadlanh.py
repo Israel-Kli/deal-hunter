@@ -95,3 +95,66 @@ def test_extract_post_id():
     soup = BeautifulSoup(html, "html.parser")
     article = soup.find("article")
     assert _extract_post_id(article) == 20649
+
+
+# ── v2 (text-based) layout tests ────────────────────────────────────
+
+V2_FIXTURE = Path(__file__).parent / "fixtures" / "nadlanh_feed_v2.html"
+
+
+def _parsed_v2_listings():
+    html = V2_FIXTURE.read_text(encoding="utf-8")
+    soup = BeautifulSoup(html, "html.parser")
+    adapter = NadlanhAdapter(search=SEARCH, request_delay_sec=0)
+    seen_ids = set()
+    listings = []
+    for article in soup.select("article.ecs-post-loop[class*='post-']"):
+        post_id = _extract_post_id(article)
+        if post_id and post_id not in seen_ids:
+            seen_ids.add(post_id)
+            listing, _reason = adapter._parse_card(article)
+            if listing is not None:
+                listings.append(listing)
+    return listings
+
+
+def test_nadlanh_v2_parses_all():
+    listings = _parsed_v2_listings()
+    assert len(listings) >= 3, f"expected >=3, got {len(listings)}"
+
+
+def test_nadlanh_v2_all_have_sqm():
+    listings = _parsed_v2_listings()
+    for l in listings:
+        assert l.sqm is not None, f"{l.source_id} missing sqm"
+
+
+def test_nadlanh_v2_all_have_rooms():
+    listings = _parsed_v2_listings()
+    for l in listings:
+        assert l.rooms is not None, f"{l.source_id} missing rooms"
+
+
+def test_nadlanh_v2_all_have_floor():
+    listings = _parsed_v2_listings()
+    for l in listings:
+        assert l.floor is not None, f"{l.source_id} missing floor"
+
+
+def test_nadlanh_v2_all_have_city():
+    listings = _parsed_v2_listings()
+    for l in listings:
+        assert l.city, f"{l.source_id} missing city"
+
+
+def test_nadlanh_v2_all_have_price():
+    listings = _parsed_v2_listings()
+    for l in listings:
+        assert l.price and l.price > 0, f"{l.source_id} bad price"
+
+
+def test_nadlanh_v2_first_listing_values():
+    listings = _parsed_v2_listings()
+    first = listings[0]
+    assert first.url.startswith("https://nadlanh.co.il/"), f"bad url: {first.url}"
+    assert first.tags, f"no tags: {first.source_id}"
