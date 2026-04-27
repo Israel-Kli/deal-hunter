@@ -138,7 +138,7 @@ class SpectraAdapter:
             listing.ac = listing.ac or "מיזוג" in ft or "מזגן" in ft
             listing.elevator = listing.elevator or "מעלית" in ft
             listing.balcony = listing.balcony or "מרפסת" in ft
-            listing.mamad = listing.mamad or "ממד" in ft or "ממ" in ft and "ד" in ft
+            listing.mamad = listing.mamad or "ממד" in ft or "ממ״ד" in ft or "ממ\"ד" in ft
             listing.renovated = listing.renovated or "משופץ" in ft or "שיפוץ" in ft
             for a in feature_links:
                 txt = a.get_text(strip=True)
@@ -226,13 +226,12 @@ class SpectraAdapter:
         floor_el = card.select_one("ul.item-amenities li[class^='h-f'] span")
         floor_i: int | None = None
         if floor_el:
-            floor_txt = floor_el.get_text() if isinstance(floor_el, Tag) else floor_el
+            floor_txt = floor_el.get_text(strip=True)
             if floor_txt:
-                floor_txt_str = floor_txt.get_text(strip=True) if isinstance(floor_txt, Tag) else str(floor_txt)
-                if "קרקע" in floor_txt_str:
+                if "קרקע" in floor_txt:
                     floor_i = 0
                 else:
-                    floor_i = _first_int(floor_txt_str)
+                    floor_i = _first_int(floor_txt)
 
         # ---- Address ----
         addr_el = card.select_one("address.item-address span")

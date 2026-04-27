@@ -103,7 +103,7 @@ class NadlanhAdapter:
             listing.ac = listing.ac or "מיזוג" in ft or "מזגן" in ft or "ממוזג" in ft
             listing.elevator = listing.elevator or "מעלית" in ft
             listing.balcony = listing.balcony or "מרפסת" in ft
-            listing.mamad = listing.mamad or "ממד" in ft or "ממ" in ft and "ד" in ft
+            listing.mamad = listing.mamad or "ממד" in ft or "ממ״ד" in ft or "ממ\"ד" in ft
             listing.renovated = listing.renovated or "משופץ" in ft or "שיפוץ" in ft
             for t in amenity_texts:
                 if t and t not in listing.tags:
@@ -189,6 +189,14 @@ class NadlanhAdapter:
             log.debug("Nadlanh filtered: reason=no_post_id article_classes=%s", article.get("class", []))
             return None, "no_post_id"
 
+        # ---- Collect all h3 elements for text-based fallback ----
+        h3_map: dict[str, str] = {}
+        for h in article.select("h3.elementor-heading-title"):
+            txt = h.get_text(strip=True)
+            if txt:
+                # Use as fallback if key field not found via icons
+                h3_map.setdefault(txt, txt)
+
         # ---- Price ----
         price_el = _find_element_by_text(article, ["h3", "h5"], re.compile(r"(מחיר|שיווק).*?([\d,]+)"))
         raw_price = price_el.get_text(strip=True) if price_el else ""
@@ -209,11 +217,13 @@ class NadlanhAdapter:
             log.debug("Nadlanh filtered: reason=price_out_of_range post_id=%s price=%d max=%s", post_id, price, s["price_max"])
             return None, "price_out_of_range"
 
-        # ---- Rooms (plan icon) ----
-        rooms_el = _find_icon_element(article, "032-plan.png")
+        # ---- Rooms: icon-based first (backward compat), text-based fallback ----
         rooms_f: float | None = None
+        rooms_el = _find_icon_element(article, "032-plan.png")
         if rooms_el:
             rooms_f = _first_float(rooms_el.get_text(strip=True))
+        if rooms_f is None:
+            rooms_f = _extract_rooms_from_texts(h3_map.values())
 
         if s.get("rooms_min") and rooms_f and rooms_f < s["rooms_min"]:
             log.debug("Nadlanh filtered: reason=rooms_out_of_range post_id=%s rooms=%s min=%s", post_id, rooms_f, s["rooms_min"])
@@ -222,17 +232,19 @@ class NadlanhAdapter:
             log.debug("Nadlanh filtered: reason=rooms_out_of_range post_id=%s rooms=%s max=%s", post_id, rooms_f, s["rooms_max"])
             return None, "rooms_out_of_range"
 
-        # ---- Built sqm (blueprint icon) ----
-        area_el = _find_icon_element(article, "043-blueprint.png")
+        # ---- Built sqm: icon-based first, text-based fallback ----
         sqm_i: int | None = None
+        area_el = _find_icon_element(article, "043-blueprint.png")
         if area_el:
             sqm_i = _first_int(area_el.get_text(strip=True))
+        if sqm_i is None:
+            sqm_i = _extract_sqm_from_texts(h3_map.values())
 
         if s.get("min_sqm") and sqm_i and sqm_i < s["min_sqm"]:
             log.debug("Nadlanh filtered: reason=sqm_too_small post_id=%s sqm=%s min=%s", post_id, sqm_i, s["min_sqm"])
             return None, "sqm_too_small"
 
-        # ---- Floor (elevator icon) ----
+        # ---- Floor: icon-based first, text-based fallback ----
         floor_el = _find_icon_element(article, "022-elevator.png")
         floor_i: int | None = None
         if floor_el:
@@ -241,6 +253,8 @@ class NadlanhAdapter:
                 floor_i = 0
             else:
                 floor_i = _first_int(floor_txt)
+        if floor_i is None:
+            floor_i = _extract_floor_from_texts(h3_map.values())
 
         # ---- Address (map-marker icon) ----
         addr_el = _find_icon_element(article, "fa-map-marker-alt", tag="i")
@@ -248,7 +262,7 @@ class NadlanhAdapter:
         if addr_el:
             parent = addr_el.parent
             if parent:
-                address = parent.get_text(strip=True).lstrip("").strip()
+                address = parent.get_text(strip=True).lstrip("\uf3c5").strip()
 
         # ---- Detail URL ----
         url = ""
@@ -265,9 +279,21 @@ class NadlanhAdapter:
             if src:
                 images.append(src)
 
-        # ---- Tags (categories) ----
+        # ---- Tags: scan all h3s with category links (robust to layout changes) ----
         tags: list[str] = []
-        cat_els = article.select("div[data-id='50749ea'] h3 a, div[data-id='bbbb907'] h3 a, div[data-id='c648453'] h3 a, div[data-id='7d7d96b'] h3 a")
+        cat_els = article.select(
+            "div[data-id='50749ea'] h3 a, div[data-id='bbbb907'] h3 a, "
+            "div[data-id='c648453'] h3 a, div[data-id='7d7d96b'] h3 a, "
+            "div[data-id='e40f041'] h3 a"
+        )
+        if not cat_els:
+            # Fallback: any h3 with a category link
+            for h in article.select("h3.elementor-heading-title"):
+                a = h.find("a")
+                if a and a.get("href", "") and "/category/" in a["href"]:
+                    txt = a.get_text(strip=True)
+                    if txt:
+                        cat_els.append(a)
         for a in cat_els:
             txt = a.get_text(strip=True)
             if txt:
@@ -383,12 +409,40 @@ def _parse_address(raw: str) -> tuple[str, str, str, str]:
     return street, house_number, neighborhood, city
 
 
+_ROOMS_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:חדרים|חד')")
+_SQM_RE = re.compile(r"(\d+)\s*מ[״\"]{0,2}ר")
+_FLOOR_RE = re.compile(r"קומה\s*(-?\d+)")
+
 _LOT_RE = re.compile(
     r"(?:מגרש|קרקע|המגרש)[^.\n]{0,80}?(\d{3,5})\s*(?:מ[״\"']?ר|מטר)",
 )
 _GARDEN_RE = re.compile(
     r"(?:גינ[הת]|חצר)[^.\n]{0,40}?(\d{2,4})\s*מ[״\"']?ר",
 )
+
+
+def _extract_rooms_from_texts(texts: Iterable[str]) -> float | None:
+    for txt in texts:
+        m = _ROOMS_RE.search(txt)
+        if m:
+            return float(m.group(1))
+    return None
+
+
+def _extract_sqm_from_texts(texts: Iterable[str]) -> int | None:
+    for txt in texts:
+        m = _SQM_RE.search(txt)
+        if m:
+            return int(m.group(1))
+    return None
+
+
+def _extract_floor_from_texts(texts: Iterable[str]) -> int | None:
+    for txt in texts:
+        m = _FLOOR_RE.search(txt)
+        if m:
+            return int(m.group(1))
+    return None
 
 
 def _extract_lot_sqm(text: str) -> int | None:
