@@ -6,10 +6,11 @@ import argparse
 import logging
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from deal_hunter import config as cfg_mod
-from deal_hunter.adapters.base import SearchFilters
+from deal_hunter.adapters.base import ScraperAdapter, SearchFilters
 from deal_hunter.adapters.ad import AdAdapter
 from deal_hunter.adapters.nadlanh import NadlanhAdapter
 from deal_hunter.adapters.onmap import OnMapAdapter
@@ -114,72 +115,99 @@ def _adapters(cfg: cfg_mod.Config):
     return out
 
 
+def _scan_adapter(
+    adapter: ScraperAdapter,
+    cfg: cfg_mod.Config,
+    db_path: Path,
+    enrich: bool,
+    max_items: int | None,
+) -> ScanResult:
+    """Scan a single adapter in its own thread. Returns the ScanResult."""
+    started = time.time()
+    result = ScanResult(source=adapter.source)
+    alert_queue: list[Listing] = []
+    with ListingsRepo(db_path) as repo:
+        try:
+            count = 0
+            for listing in adapter.fetch_feed(SearchFilters()):
+                if enrich or getattr(adapter, "enrich_always", False):
+                    try:
+                        adapter.fetch_detail(listing)
+                    except Exception as e:
+                        result.errors.append(f"enrich {listing.source_id}: {e}")
+                try:
+                    enrich_listing_fair_price(listing, repo.conn)
+                except Exception as e:
+                    log.debug("fair_price skipped for %s: %s", listing.source_id, e)
+                extract_features(listing)
+                score, reasons = score_listing(listing)
+                listing.score = score
+                listing.score_reasons = reasons
+                is_new, prev_price = repo.upsert(listing)
+                result.fetched += 1
+                count += 1
+                if is_new:
+                    result.new += 1
+                else:
+                    result.updated += 1
+                    if prev_price and listing.price < prev_price:
+                        drop_pct = (prev_price - listing.price) / prev_price * 100
+                        if drop_pct >= cfg.notifications.price_drop_pct:
+                            result.price_drops += 1
+                            alert_queue.append(listing)
+                if is_new and score >= cfg.notifications.score_threshold:
+                    alert_queue.append(listing)
+                if max_items and count >= max_items:
+                    break
+        except Exception as e:
+            log.exception("adapter %s failed", adapter.source)
+            result.errors.append(str(e))
+
+        if alert_queue:
+            sent = telegram.send(
+                alert_queue,
+                bot_token=cfg.notifications.telegram_bot_token,
+                chat_id=cfg.notifications.telegram_chat_id,
+            )
+            result.alerted = sent
+
+        result.duration_sec = round(time.time() - started, 2)
+        repo.log_scan(result)
+    return result
+
+
 def run_once(cfg: cfg_mod.Config, *, enrich: bool = False, max_items: int | None = None) -> int:
     """Scrape, score, upsert, dedup, alert. Returns number of alerts sent/logged."""
     db_path = Path(cfg.data_dir) / "deal-hunter.db"
+    adapters = _adapters(cfg)
+    if not adapters:
+        log.warning("No adapters enabled, nothing to scan")
+        return 0
+
     total_alerts = 0
-    fresh_listings: list[Listing] = []
-    with ListingsRepo(db_path) as repo:
-        for adapter in _adapters(cfg):
-            started = time.time()
-            result = ScanResult(source=adapter.source)
-            alert_queue: list[Listing] = []
+
+    # ── Scan adapters in parallel ─────────────────────────────────────
+    with ThreadPoolExecutor(max_workers=len(adapters)) as pool:
+        futures = {
+            pool.submit(_scan_adapter, adapter, cfg, db_path, enrich, max_items): adapter
+            for adapter in adapters
+        }
+        for future in as_completed(futures):
+            adapter = futures[future]
             try:
-                count = 0
-                for listing in adapter.fetch_feed(SearchFilters()):
-                    if enrich:
-                        try:
-                            adapter.fetch_detail(listing)
-                        except Exception as e:
-                            result.errors.append(f"enrich {listing.source_id}: {e}")
-                    # Fair-price valuation (uses comps already in DB from prior runs)
-                    try:
-                        enrich_listing_fair_price(listing, repo.conn)
-                    except Exception as e:
-                        log.debug("fair_price skipped for %s: %s", listing.source_id, e)
-                    extract_features(listing)
-                    score, reasons = score_listing(listing)
-                    listing.score = score
-                    listing.score_reasons = reasons
-                    is_new, prev_price = repo.upsert(listing)
-                    result.fetched += 1
-                    count += 1
-                    if is_new:
-                        result.new += 1
-                    else:
-                        result.updated += 1
-                        if prev_price and listing.price < prev_price:
-                            drop_pct = (prev_price - listing.price) / prev_price * 100
-                            if drop_pct >= cfg.notifications.price_drop_pct:
-                                result.price_drops += 1
-                                alert_queue.append(listing)
-                    if is_new and score >= cfg.notifications.score_threshold:
-                        alert_queue.append(listing)
-                    if max_items and count >= max_items:
-                        break
-            except Exception as e:
-                log.exception("adapter %s failed", adapter.source)
-                result.errors.append(str(e))
-
-            if alert_queue:
-                sent = telegram.send(
-                    alert_queue,
-                    bot_token=cfg.notifications.telegram_bot_token,
-                    chat_id=cfg.notifications.telegram_chat_id,
+                result = future.result()
+                total_alerts += result.alerted
+                log.info(
+                    "scan %s: fetched=%d new=%d updated=%d drops=%d alerted=%d in %.1fs errors=%d",
+                    result.source, result.fetched, result.new, result.updated,
+                    result.price_drops, result.alerted, result.duration_sec, len(result.errors),
                 )
-                result.alerted = sent
-                total_alerts += sent
+            except Exception as e:
+                log.exception("adapter %s crashed", adapter.source)
 
-            result.duration_sec = round(time.time() - started, 2)
-            repo.log_scan(result)
-            log.info(
-                "scan %s: fetched=%d new=%d updated=%d drops=%d alerted=%d in %.1fs errors=%d",
-                result.source, result.fetched, result.new, result.updated,
-                result.price_drops, result.alerted, result.duration_sec, len(result.errors),
-            )
-
-        # ── Cross-source dedup pass ──────────────────────────────────────
-        try:
+    # ── Cross-source dedup pass ─────────────────────────────────────
+    try:
+        with ListingsRepo(db_path) as repo:
             existing = load_existing_groups(repo.conn)
             uncanonical = repo.list_uncanonical()
             if uncanonical:
@@ -212,8 +240,8 @@ def run_once(cfg: cfg_mod.Config, *, enrich: bool = False, max_items: int | None
                         "dedup: %d listings → %d canonical groups, %d multi-source",
                         len(listings_to_dedup), len(groups), merged,
                     )
-        except Exception:
-            log.exception("dedup pass failed")
+    except Exception:
+        log.exception("dedup pass failed")
 
     return total_alerts
 
