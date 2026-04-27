@@ -73,6 +73,7 @@ class Listing(BaseModel):
     garden_sqm: int | None = None
     lot_sqm: int | None = None
 
+    rooms_user: float | None = None
     sqm_user: int | None = None
     sqm_build_user: int | None = None
     units_count_user: int | None = None

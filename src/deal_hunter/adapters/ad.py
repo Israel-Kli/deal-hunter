@@ -211,6 +211,7 @@ class AdAdapter:
         if not isinstance(title_el, Tag):
             title_el = card.find("h2", class_="card-title")
         if not isinstance(title_el, Tag):
+            log.debug("Ad parse_card failed: no_title_el source_id=%s", source_id)
             return None
         title = _text(title_el)
         city, neighborhood = _split_city_title(title)
@@ -223,6 +224,7 @@ class AdAdapter:
         price_el = card.find("div", class_="price")
         price = _parse_price(_text(price_el))
         if price is None:
+            log.debug("Ad parse_card failed: bad_price source_id=%s text=%s", source_id, _text(price_el))
             return None
 
         # Icons → rooms / sqm
@@ -256,6 +258,8 @@ class AdAdapter:
         else:
             url = f"{WEB_BASE}/ad/{source_id}"
 
+        log.debug("Ad parsed: source_id=%s price=%d rooms=%s sqm=%s city=%s neighborhood=%s", source_id, price, rooms, sqm, city, neighborhood)
+
         return Listing(
             source="ad",
             source_id=source_id,
@@ -279,16 +283,22 @@ class AdAdapter:
 
     def _passes_filters(self, listing: Listing) -> str | None:
         s = self.search
+        sid = listing.source_id
         if self._allowed_city_keys is not None and hebrew_city_match_key(listing.city) not in self._allowed_city_keys:
+            log.debug("Ad filtered: reason=city_not_allowed source_id=%s city=%s", sid, listing.city)
             return "city_not_allowed"
         if listing.price < s.get("price_min", 0) or listing.price > s.get("price_max", 10**12):
+            log.debug("Ad filtered: reason=price_out_of_range source_id=%s price=%d expected=[%s, %s]", sid, listing.price, s.get("price_min", 0), s.get("price_max", 10**12))
             return "price_out_of_range"
         if listing.rooms is not None:
             if not (s.get("rooms_min", 0) <= listing.rooms <= s.get("rooms_max", 99)):
+                log.debug("Ad filtered: reason=rooms_out_of_range source_id=%s rooms=%s expected=[%s, %s]", sid, listing.rooms, s.get("rooms_min", 0), s.get("rooms_max", 99))
                 return "rooms_out_of_range"
         if s.get("min_sqm") and listing.sqm and listing.sqm < s["min_sqm"]:
+            log.debug("Ad filtered: reason=sqm_too_small source_id=%s sqm=%s min_sqm=%s", sid, listing.sqm, s["min_sqm"])
             return "sqm_too_small"
         if s.get("exclude_ground_floor") and listing.floor == 0:
+            log.debug("Ad filtered: reason=ground_floor source_id=%s", sid)
             return "ground_floor"
         return None
 

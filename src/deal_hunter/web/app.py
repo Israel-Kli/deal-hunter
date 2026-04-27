@@ -13,6 +13,7 @@ from deal_hunter.dedup.canonicalizer import load_existing_groups
 from deal_hunter.effective import (
     effective_garden_sqm,
     effective_price_per_sqm,
+    effective_rooms,
     effective_sqm,
     effective_sqm_build,
     effective_units,
@@ -167,14 +168,14 @@ def _make_handler(cfg: Config):
                         self._write_json(404, {"status": "error", "error": "Listing not found"})
                         return
                     overrides: dict = {}
-                    for col in ("sqm_user", "sqm_build_user", "units_count_user", "garden_sqm_user"):
+                    for col in ("rooms_user", "sqm_user", "sqm_build_user", "units_count_user", "garden_sqm_user"):
                         if col in data:
                             val = data[col]
                             if val is not None:
                                 try:
-                                    val = int(val)
+                                    val = float(val) if col == "rooms_user" else int(val)
                                 except (ValueError, TypeError):
-                                    self._write_json(400, {"status": "error", "error": f"{col} must be an integer or null"})
+                                    self._write_json(400, {"status": "error", "error": f"{col} must be a number or null"})
                                     return
                             overrides[col] = val
                     ok = repo.update_user_fields(str(source), str(source_id), **overrides)
@@ -211,6 +212,7 @@ def _make_handler(cfg: Config):
                         first_listed_date=row.get("first_listed_date") or "",
                         is_favorite=bool(row.get("is_favorite")),
                         user_notes=row.get("user_notes") or "",
+                        rooms_user=row.get("rooms_user"),
                         sqm_user=row.get("sqm_user"),
                         sqm_build_user=row.get("sqm_build_user"),
                         units_count_user=row.get("units_count_user"),
@@ -229,6 +231,7 @@ def _make_handler(cfg: Config):
                     "ok": True,
                     "score": new_score,
                     "score_reasons": new_reasons,
+                    "rooms_eff": effective_rooms(row),
                     "sqm_eff": effective_sqm(row),
                     "sqm_build_eff": effective_sqm_build(row),
                     "units_count_eff": effective_units(row),

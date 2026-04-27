@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 from bs4 import BeautifulSoup
 
 from deal_hunter.adapters.spectra import SpectraAdapter, _parse_address
+from deal_hunter.models import Listing
 
 FIXTURE = Path(__file__).parent / "fixtures" / "spectra_feed.html"
+DETAIL_FIXTURE = Path(__file__).parent / "fixtures" / "spectra_detail.html"
 
 SEARCH = {
     "rooms_min": 1.0,
@@ -89,3 +92,44 @@ def test_parse_address():
     assert _parse_address("אריאל שנהב 7") == ("שנהב", "7", "", "אריאל")
     assert _parse_address("ברקן, הרקפת 140") == ("הרקפת", "140", "", "ברקן")
     assert _parse_address("רחוב הגליל 22, אריאל") == ("הגליל", "22", "", "אריאל")
+
+
+def test_detail_enriches_lot_sqm():
+    detail_html = DETAIL_FIXTURE.read_text(encoding="utf-8")
+    listing = Listing(
+        source="spectra", source_id="20105", url="https://example.com/test",
+        city="אריאל", price=3890000, sqm=180, is_agent=True,
+    )
+    adapter = SpectraAdapter(search=SEARCH, request_delay_sec=0)
+    with patch("deal_hunter.adapters.spectra.fetch", return_value=detail_html):
+        with patch("time.sleep"):
+            enriched = adapter.fetch_detail(listing)
+    assert enriched.lot_sqm == 407
+
+
+def test_detail_enriches_garden_and_balcony():
+    detail_html = DETAIL_FIXTURE.read_text(encoding="utf-8")
+    listing = Listing(
+        source="spectra", source_id="20105", url="https://example.com/test",
+        city="אריאל", price=3890000, sqm=180, is_agent=True,
+    )
+    adapter = SpectraAdapter(search=SEARCH, request_delay_sec=0)
+    with patch("deal_hunter.adapters.spectra.fetch", return_value=detail_html):
+        with patch("time.sleep"):
+            enriched = adapter.fetch_detail(listing)
+    assert enriched.garden_sqm == 213, f"expected 213, got {enriched.garden_sqm}"
+    assert enriched.balcony is True
+
+
+def test_detail_built_area_authoritative():
+    detail_html = DETAIL_FIXTURE.read_text(encoding="utf-8")
+    listing = Listing(
+        source="spectra", source_id="20105", url="https://example.com/test",
+        city="אריאל", price=3890000, sqm=999, is_agent=True,
+    )
+    adapter = SpectraAdapter(search=SEARCH, request_delay_sec=0)
+    with patch("deal_hunter.adapters.spectra.fetch", return_value=detail_html):
+        with patch("time.sleep"):
+            enriched = adapter.fetch_detail(listing)
+    assert enriched.sqm == 180, "detail 'שטח בנוי' should override card-level guess"
+    assert enriched.sqm_build == 180

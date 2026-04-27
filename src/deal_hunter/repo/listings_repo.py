@@ -15,6 +15,7 @@ from deal_hunter.dates import earliest_yyyy_mm_dd
 from deal_hunter.effective import (
     effective_garden_sqm,
     effective_price_per_sqm,
+    effective_rooms,
     effective_sqm,
     effective_sqm_build,
     effective_units,
@@ -50,6 +51,8 @@ class ListingsRepo:
         for col in ("units_count", "garden_sqm", "lot_sqm"):
             if col not in columns:
                 self.conn.execute(f"ALTER TABLE listings ADD COLUMN {col} INTEGER")
+        if "rooms_user" not in columns:
+            self.conn.execute("ALTER TABLE listings ADD COLUMN rooms_user REAL")
         for col in ("sqm_user", "sqm_build_user", "units_count_user", "garden_sqm_user", "lot_sqm_user"):
             if col not in columns:
                 self.conn.execute(f"ALTER TABLE listings ADD COLUMN {col} INTEGER")
@@ -120,6 +123,7 @@ class ListingsRepo:
                 score, score_reasons, source_payload,
                 is_favorite, user_notes,
                 units_count, garden_sqm, lot_sqm,
+                rooms_user,
                 sqm_user, sqm_build_user, units_count_user, garden_sqm_user, lot_sqm_user
             ) VALUES (
                 ?,?,?, ?,?,?,?,?,
@@ -134,6 +138,7 @@ class ListingsRepo:
                 ?,?,?,
                 ?,?,?,
                 ?,?,?,
+                ?,
                 ?,?,?,?
             )
             ON CONFLICT(source, source_id) DO UPDATE SET
@@ -200,6 +205,7 @@ class ListingsRepo:
                 0,
                 "",
                 listing.units_count, listing.garden_sqm, listing.lot_sqm,
+                listing.rooms_user,
                 listing.sqm_user, listing.sqm_build_user,
                 listing.units_count_user, listing.garden_sqm_user,
                 listing.lot_sqm_user,
@@ -219,6 +225,7 @@ class ListingsRepo:
         *,
         is_favorite: bool | None = None,
         user_notes: str | None = None,
+        rooms_user: float | None = _UNSET,
         sqm_user: int | None = _UNSET,
         sqm_build_user: int | None = _UNSET,
         units_count_user: int | None = _UNSET,
@@ -238,6 +245,7 @@ class ListingsRepo:
             args.append(user_notes[:2000])
 
         override_map = {
+            "rooms_user": rooms_user,
             "sqm_user": sqm_user,
             "sqm_build_user": sqm_build_user,
             "units_count_user": units_count_user,
@@ -285,6 +293,7 @@ class ListingsRepo:
             d.pop("images_json", None)
             d.pop("tags_json", None)
             d.pop("source_payload", None)
+            d["rooms_eff"] = effective_rooms(d)
             d["sqm_eff"] = effective_sqm(d)
             d["sqm_build_eff"] = effective_sqm_build(d)
             d["units_count_eff"] = effective_units(d)

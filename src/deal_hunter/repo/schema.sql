@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS listings (
     garden_sqm      INTEGER,
     lot_sqm         INTEGER,
 
+    rooms_user      REAL,
     sqm_user        INTEGER,
     sqm_build_user  INTEGER,
     units_count_user INTEGER,

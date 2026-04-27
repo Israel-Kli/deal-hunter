@@ -186,22 +186,27 @@ class NadlanhAdapter:
     def _parse_card(self, article: Tag) -> tuple[Listing | None, str | None]:
         post_id = _extract_post_id(article)
         if not post_id:
+            log.debug("Nadlanh filtered: reason=no_post_id article_classes=%s", article.get("class", []))
             return None, "no_post_id"
 
         # ---- Price ----
         price_el = _find_element_by_text(article, ["h3", "h5"], re.compile(r"(מחיר|שיווק).*?([\d,]+)"))
         raw_price = price_el.get_text(strip=True) if price_el else ""
         if not raw_price:
+            log.debug("Nadlanh filtered: reason=no_price post_id=%s", post_id)
             return None, "no_price"
         try:
             price = int(re.sub(r"[^\d]", "", raw_price))
         except ValueError:
+            log.debug("Nadlanh filtered: reason=bad_price post_id=%s raw=%s", post_id, raw_price)
             return None, "bad_price"
 
         s = self.search
         if s.get("price_min") and price < s["price_min"]:
+            log.debug("Nadlanh filtered: reason=price_out_of_range post_id=%s price=%d min=%s", post_id, price, s["price_min"])
             return None, "price_out_of_range"
         if s.get("price_max") and price > s["price_max"]:
+            log.debug("Nadlanh filtered: reason=price_out_of_range post_id=%s price=%d max=%s", post_id, price, s["price_max"])
             return None, "price_out_of_range"
 
         # ---- Rooms (plan icon) ----
@@ -211,8 +216,10 @@ class NadlanhAdapter:
             rooms_f = _first_float(rooms_el.get_text(strip=True))
 
         if s.get("rooms_min") and rooms_f and rooms_f < s["rooms_min"]:
+            log.debug("Nadlanh filtered: reason=rooms_out_of_range post_id=%s rooms=%s min=%s", post_id, rooms_f, s["rooms_min"])
             return None, "rooms_out_of_range"
         if s.get("rooms_max") and rooms_f and rooms_f > s["rooms_max"]:
+            log.debug("Nadlanh filtered: reason=rooms_out_of_range post_id=%s rooms=%s max=%s", post_id, rooms_f, s["rooms_max"])
             return None, "rooms_out_of_range"
 
         # ---- Built sqm (blueprint icon) ----
@@ -222,6 +229,7 @@ class NadlanhAdapter:
             sqm_i = _first_int(area_el.get_text(strip=True))
 
         if s.get("min_sqm") and sqm_i and sqm_i < s["min_sqm"]:
+            log.debug("Nadlanh filtered: reason=sqm_too_small post_id=%s sqm=%s min=%s", post_id, sqm_i, s["min_sqm"])
             return None, "sqm_too_small"
 
         # ---- Floor (elevator icon) ----
@@ -267,6 +275,8 @@ class NadlanhAdapter:
 
         # ---- Address parts ----
         street, house_number, neighborhood, city = _parse_address(address)
+
+        log.debug("Nadlanh parsed: post_id=%s price=%d rooms=%s sqm=%s city=%s", post_id, price, rooms_f, sqm_i, city)
 
         return Listing(
             source="nadlanh",

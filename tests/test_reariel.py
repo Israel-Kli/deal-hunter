@@ -105,3 +105,47 @@ def test_extract_garden_sqm():
     assert _extract_garden_sqm("גינה ענקית של 120 מ\"ר") == 120
     assert _extract_garden_sqm("חצר קטנה") is None
     assert _extract_garden_sqm("אין גינה") is None
+
+
+def test_reariel_city_filter_allowed():
+    """Only listings from allowed cities pass through."""
+    adapter = RearielAdapter(
+        search=SEARCH,
+        allowed_cities=["אריאל"],
+        request_delay_sec=0,
+    )
+    html = FIXTURE.read_text(encoding="utf-8")
+    soup = BeautifulSoup(html, "html.parser")
+    catalog = soup.select_one("#Catalog .collection-list-wrapper-3") or soup.select_one("#Catalog")
+    cards = catalog.select(".collection-item-3.w-dyn-item") if catalog else []
+    listings = []
+    for card in cards:
+        listing, reason = adapter._parse_card(card)
+        if listing is not None:
+            listings.append(listing)
+        elif reason == "city_not_allowed":
+            pass
+
+    assert len(listings) >= 30, f"expected >=30 Ariel-only listings, got {len(listings)}"
+    assert all(l.city == "אריאל" for l in listings), "all passed listings must be from Ariel"
+
+
+def test_reariel_no_city_filter():
+    """Without allowed_cities, all listings pass through (backward compat)."""
+    adapter = RearielAdapter(
+        search=SEARCH,
+        request_delay_sec=0,
+    )
+    html = FIXTURE.read_text(encoding="utf-8")
+    soup = BeautifulSoup(html, "html.parser")
+    catalog = soup.select_one("#Catalog .collection-list-wrapper-3") or soup.select_one("#Catalog")
+    cards = catalog.select(".collection-item-3.w-dyn-item") if catalog else []
+    listings = []
+    cities = set()
+    for card in cards:
+        listing, _reason = adapter._parse_card(card)
+        if listing is not None:
+            listings.append(listing)
+            cities.add(listing.city)
+    assert len(listings) >= 50, f"expected >=50 listings without filter, got {len(listings)}"
+    assert len(cities) > 1, "expected multiple cities when no filter applied"

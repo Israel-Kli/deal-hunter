@@ -18,6 +18,7 @@ from bs4 import BeautifulSoup, Tag
 from deal_hunter.adapters.base import SearchFilters
 from deal_hunter.http_client import fetch
 from deal_hunter.models import Listing
+from deal_hunter.normalize.israeli_cities import hebrew_allowed_city_keys, hebrew_city_match_key
 
 log = logging.getLogger(__name__)
 
@@ -37,10 +38,15 @@ class RearielAdapter:
         self,
         search: dict[str, Any],
         *,
+        allowed_cities: list[str] | None = None,
         request_delay_sec: float = 1.5,
     ):
         self.search = search
         self.request_delay = request_delay_sec
+        if allowed_cities:
+            self._allowed_city_keys = hebrew_allowed_city_keys(list(allowed_cities))
+        else:
+            self._allowed_city_keys = None
 
     def fetch_feed(self, filters: SearchFilters) -> Iterable[Listing]:
         html = fetch(FEED_URL, as_json=False, headers=REARIEL_HEADERS)
@@ -141,12 +147,15 @@ class RearielAdapter:
         try:
             price = int(re.sub(r"[^\d]", "", raw_price))
         except ValueError:
+            log.debug("Reariel filtered: reason=bad_price raw=%s", raw_price)
             return None, "bad_price"
 
         s = self.search
         if s.get("price_min") and price < s["price_min"]:
+            log.debug("Reariel filtered: reason=price_out_of_range price=%d min=%s", price, s["price_min"])
             return None, "price_out_of_range"
         if s.get("price_max") and price > s["price_max"]:
+            log.debug("Reariel filtered: reason=price_out_of_range price=%d max=%s", price, s["price_max"])
             return None, "price_out_of_range"
 
         # Property type
@@ -193,10 +202,13 @@ class RearielAdapter:
             sqm_i = _first_int(info_nums[1].get_text()) if "מ" in (_text(details_labels[1]) if len(details_labels) > 1 else "") else None
 
         if s.get("rooms_min") and rooms_f and rooms_f < s["rooms_min"]:
+            log.debug("Reariel filtered: reason=rooms_out_of_range rooms=%s min=%s", rooms_f, s["rooms_min"])
             return None, "rooms_out_of_range"
         if s.get("rooms_max") and rooms_f and rooms_f > s["rooms_max"]:
+            log.debug("Reariel filtered: reason=rooms_out_of_range rooms=%s max=%s", rooms_f, s["rooms_max"])
             return None, "rooms_out_of_range"
         if s.get("min_sqm") and sqm_i and sqm_i < s["min_sqm"]:
+            log.debug("Reariel filtered: reason=sqm_too_small sqm=%s min=%s", sqm_i, s["min_sqm"])
             return None, "sqm_too_small"
 
         # Description blurb
@@ -209,12 +221,19 @@ class RearielAdapter:
         # Parse address parts
         street, house_number, neighborhood, city = _parse_address(address)
 
+        # City filter
+        if self._allowed_city_keys is not None and hebrew_city_match_key(city) not in self._allowed_city_keys:
+            log.debug("Reariel filtered: reason=city_not_allowed source_id=%s city=%s", source_id, city)
+            return None, "city_not_allowed"
+
         # Amenities from tags
         tl = " ".join(tags)
         parking = "חנייה" in tl or "חניה" in tl
         balcony = "מרפסת" in tl
         mamad = "ממ" in tl and "ד" in tl
         renovated = "משופץ" in tl
+
+        log.debug("Reariel parsed: source_id=%s price=%d rooms=%s sqm=%s city=%s type=%s", source_id, price, rooms_f, sqm_i, city, asset_type)
 
         return Listing(
             source="reariel",

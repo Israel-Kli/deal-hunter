@@ -127,11 +127,12 @@ def outdoor_and_rooms_bonus(
     listing: Listing,
     text: str,
     effective_garden_sqm: int | None = None,
+    effective_rooms: float | None = None,
 ) -> tuple[float, dict[str, object]]:
     g_pts, g_hit, g_src = garden_bonus_and_matches(
         text, effective_garden_sqm
     )
-    r_pts = room_count_bonus(listing.rooms)
+    r_pts = room_count_bonus(effective_rooms if effective_rooms is not None else listing.rooms)
     cap = 0.95
     combined = min(cap, g_pts + r_pts)
     detail: dict[str, object] = {

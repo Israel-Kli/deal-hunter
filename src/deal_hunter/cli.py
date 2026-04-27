@@ -79,9 +79,11 @@ def _adapters(cfg: cfg_mod.Config):
         )
     # Madlan adapter still deferred (PerimeterX CAPTCHA).
     if cfg.sources.reariel:
+        allowed_cities = [c.hebrew_name for c in cfg.cities if c.hebrew_name]
         out.append(
             RearielAdapter(
                 search=cfg.search.model_dump(),
+                allowed_cities=allowed_cities,
                 request_delay_sec=cfg.schedule.delay_between_requests_sec,
             )
         )
