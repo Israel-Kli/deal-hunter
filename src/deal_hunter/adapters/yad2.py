@@ -33,6 +33,7 @@ AGENCY_KEYWORDS = [
 
 class Yad2Adapter:
     source = "yad2"
+    enrich_always = True  # feed JSON lacks description; detail HTML has it
 
     def __init__(self, cities: list[dict[str, Any]], search: dict[str, Any], *, max_pages: int = 10, request_delay_sec: float = 3.0):
         self.cities = cities
