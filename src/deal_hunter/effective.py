@@ -70,7 +70,7 @@ def effective_rooms(obj: dict[str, Any] | Any) -> float | None:
 
 
 def effective_price_per_sqm(obj: dict[str, Any] | Any) -> int | None:
-    sqm = effective_sqm(obj)
+    sqm = effective_sqm_build(obj)
     price = (
         getattr(obj, "price", None)
         if not isinstance(obj, dict)

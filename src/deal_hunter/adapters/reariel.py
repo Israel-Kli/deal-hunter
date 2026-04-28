@@ -193,15 +193,25 @@ class RearielAdapter:
         # Address
         address = _text(card.select_one("h4.address")) or ""
 
-        # Rooms / sqm from cards-white-part
+        # Rooms / sqm from cards-white-part — walk paired (value, label) by DOM order
         rooms_f: float | None = None
         sqm_i: int | None = None
         info_nums = card.select(".details-wrapper .info-numbers-2")
         details_labels = card.select(".details-wrapper .apartment-details2, .details-wrapper .apartment-details-2")
-        if len(info_nums) == 2:
-            rooms_f = _first_float(info_nums[0].get_text())
-        if len(info_nums) == 2:
-            sqm_i = _first_int(info_nums[1].get_text()) if "מ" in (_text(details_labels[1]) if len(details_labels) > 1 else "") else None
+        for i, num_el in enumerate(info_nums):
+            label_text = _text(details_labels[i]) if i < len(details_labels) else ""
+            if "חדר" in label_text:
+                if rooms_f is None:
+                    rooms_f = _first_float(num_el.get_text(strip=True))
+            elif _is_sqm_label(label_text):
+                if sqm_i is None:
+                    sqm_i = _first_int(num_el.get_text(strip=True))
+            else:
+                # Fallback: assume first numeric is rooms, second is sqm
+                if i == 0 and rooms_f is None:
+                    rooms_f = _first_float(num_el.get_text(strip=True))
+                elif i == 1 and sqm_i is None:
+                    sqm_i = _first_int(num_el.get_text(strip=True))
 
         if s.get("rooms_min") and rooms_f and rooms_f < s["rooms_min"]:
             log.debug("Reariel filtered: reason=rooms_out_of_range rooms=%s min=%s", rooms_f, s["rooms_min"])
@@ -280,6 +290,16 @@ def _first_int(s: str) -> int | None:
 def _first_float(s: str) -> float | None:
     m = re.search(r"(\d+(?:\.\d+)?)", s)
     return float(m.group(1)) if m else None
+
+
+_SQM_LABEL_INDICATORS = ("מ״ר", 'מ"ר', "מטר", "מ'", "מ׳ר", "שטח")
+
+
+def _is_sqm_label(text: str) -> bool:
+    """Check whether a detail label refers to square-meter area."""
+    if not text:
+        return False
+    return any(ind in text for ind in _SQM_LABEL_INDICATORS)
 
 
 def _parse_address(raw: str) -> tuple[str, str, str, str]:
