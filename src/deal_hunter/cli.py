@@ -67,7 +67,7 @@ def _adapters(cfg: cfg_mod.Config):
                 )
             )
     if cfg.sources.ad:
-        paths = cfg.ad_city_paths or ["/nadlansale"]
+        paths = cfg.ad_city_paths or [f"/city/{c.slug}" for c in cfg.cities if c.slug]
         allowed_cities = [c.hebrew_name for c in cfg.cities if c.hebrew_name]
         out.append(
             AdAdapter(
