@@ -41,6 +41,18 @@ def _try_extract_units_count(text: str) -> int | None:
             val = int(m.group(1))
             if val > 0:
                 return val
+
+    # Fallback: when no explicit count, count distinct "יחידת דיור" mentions
+    unit_mentions = re.findall(
+        r"(?:^|[\s\u200e\u200f])(?:ו)?יחידת\s+דיור", text
+    )
+    if len(unit_mentions) >= 2:
+        has_separator = any(
+            kw in text for kw in ("נוספת", "נוסף", "נפרדת", "נפרד", "סטודיו", "שנייה", "אחרת")
+        )
+        if has_separator:
+            return len(unit_mentions)
+
     return None
 
 

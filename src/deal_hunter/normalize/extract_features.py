@@ -47,6 +47,21 @@ def _extract_units_count(text: str) -> int | None:
             if fp and fp.start() <= m.start() + len(m.group(0)) and fp.start() >= m.start() - 10:
                 continue
             return val
+
+    # Fallback: count distinct mentions of "יחידת דיור" or "יחידות דיור"
+    # when no explicit count number is given (e.g. "וילה עם יחידת דיור נפרדת ויחידת דיור סטודיו נוספת")
+    unit_mentions = re.findall(
+        r"(?:^|[\s\u200e\u200f])(?:ו)?יחידת\s+דיור", text
+    )
+    if len(unit_mentions) >= 2:
+        # Verify at least one mention has a marker suggesting a separate unit
+        # (not just the same unit repeated)
+        has_separator = any(
+            kw in text for kw in ("נוספת", "נוסף", "נפרדת", "נפרד", "סטודיו", "שנייה", "אחרת")
+        )
+        if has_separator:
+            return len(unit_mentions)
+
     return None
 
 
