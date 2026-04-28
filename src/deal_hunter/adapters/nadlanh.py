@@ -89,6 +89,7 @@ def _fetch_urllib(url: str, timeout: int = 30, retries: int = 3) -> str | None:
 
 class NadlanhAdapter:
     source = "nadlanh"
+    enrich_always = True  # detail page has full description + amenity detection
 
     def __init__(
         self,
