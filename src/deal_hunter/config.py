@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
+
+log = logging.getLogger(__name__)
 
 
 class SearchCfg(BaseModel):
@@ -105,12 +108,15 @@ def _env_override(cfg: dict[str, Any]) -> dict[str, Any]:
     n = cfg.setdefault("notifications", {})
     if tok := os.environ.get("TELEGRAM_BOT_TOKEN"):
         n["telegram_bot_token"] = tok
+        log.debug("TELEGRAM_BOT_TOKEN overridden from env")
     if cid := os.environ.get("TELEGRAM_CHAT_ID"):
         n["telegram_chat_id"] = cid
+        log.debug("TELEGRAM_CHAT_ID overridden from env")
     return cfg
 
 
 def load(path: str | Path = "configs/config.json") -> Config:
     p = Path(path)
+    log.info("Loading config: %s", p)
     raw = json.loads(p.read_text(encoding="utf-8"))
     return Config.model_validate(_env_override(raw))

@@ -11,7 +11,7 @@ from typing import Any
 
 from deal_hunter.models import Listing
 
-log = logging.getLogger("deal_hunter.ai")
+log = logging.getLogger(__name__)
 
 _AI_FIELDS: tuple[str, ...] = (
     "rooms", "sqm", "sqm_build", "floor",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -31,9 +32,16 @@ from deal_hunter.valuation.fair_price import enrich_listing_fair_price
 log = logging.getLogger("deal_hunter")
 
 
-def _setup_logging() -> None:
+def _setup_logging(debug: bool = False) -> None:
+    env_level = os.environ.get("LOG_LEVEL", "").upper()
+    if env_level in ("DEBUG", "INFO", "WARNING", "ERROR"):
+        level = getattr(logging, env_level)
+    elif debug:
+        level = logging.DEBUG
+    else:
+        level = logging.INFO
     logging.basicConfig(
-        level=logging.INFO,
+        level=level,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
 
@@ -445,8 +453,8 @@ def cmd_dashboard(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    _setup_logging()
     p = argparse.ArgumentParser(prog="deal-hunter")
+    p.add_argument("--debug", action="store_true", help="Enable debug-level logging")
     p.add_argument("--config", default="configs/config.json")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -478,6 +486,7 @@ def main() -> int:
     dash_p.set_defaults(func=cmd_dashboard)
 
     args = p.parse_args()
+    _setup_logging(args.debug)
     return args.func(args)
 
 
