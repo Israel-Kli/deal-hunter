@@ -45,7 +45,7 @@ KOMO_HEADERS = {
 }
 
 _MOREDETAILS_RE = re.compile(
-    r"(?P<prop_type>.+?)\s+(?P<rooms>[\d.]+)\s+חדרים\s+\((?P<sqm>\d+)\s*מ[״"]ר\)\s+קומה:\s*(?P<floor>[^\s]+)\s*(?:מתוך\s*(?P<total_floors>\d+))?",
+    r'(?P<prop_type>.+?)\s+(?P<rooms>[\d.]+)\s+חדרים\s+\((?P<sqm>\d+)\s*מ[״"\']ר\)\s+קומה:\s*(?P<floor>[^\s]+)\s*(?:מתוך\s*(?P<total_floors>\d+))?',
 )
 
 
