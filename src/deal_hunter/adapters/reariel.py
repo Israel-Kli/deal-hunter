@@ -330,20 +330,29 @@ def _parse_address(raw: str) -> tuple[str, str, str, str]:
 
 
 _LOT_RE = re.compile(
-    r"(?:מגרש|קרקע|המגרש|פינת[יי])\s[^.]{0,80}?\s(\d{3,5})\s*(?:מ[״\"']?ר|מטר)",
+    r"(?:מגרש|קרקע|המגרש|פינת[יי])"
+    r"(?:"
+    r"[^.\n]{0,80}?(\d{3,5})\s*(?:מ[״\"'׳]?ר|מטר)"
+    r"|"
+    r"\s*מ[״\"'׳]?ר\s*(\d{3,5})"
+    r"|"
+    r"[^.\n]{0,40}?(\d{3,5})(?:[\s,.]|$)"  # "מגרש 600" without unit
+    r")",
 )
 _LOT_DUNAM_RE = re.compile(
-    r"(?:דונם|חצי\s+דונם)[^.]{0,40}?(\d{3,5})\s*(?:מ[״\"']?ר|מטר)",
+    r"(?:דונם|חצי\s+דונם)[^.]{0,40}?(\d{3,5})\s*(?:מ[״\"'׳]?ר|מטר)",
 )
 _GARDEN_RE = re.compile(
-    r"(?:גינ[הת]|חצר)[^.\n]{0,40}?(\d{2,4})\s*מ[״\"']?ר",
+    r"(?:גינ[הת]|חצר)[^.\n]{0,40}?(\d{2,4})\s*מ[״\"'׳]?ר",
 )
 
 
 def _extract_lot_sqm(text: str) -> int | None:
     m = _LOT_RE.search(text)
     if m:
-        return int(m.group(1))
+        val = m.group(1) or m.group(2) or m.group(3)
+        if val:
+            return int(val)
     m = _LOT_DUNAM_RE.search(text)
     if m:
         return int(m.group(1))

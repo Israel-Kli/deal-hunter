@@ -34,6 +34,7 @@ SPECTRA_HEADERS = {
 
 class SpectraAdapter:
     source = "spectra"
+    enrich_always = True  # detail pages carry description, lot_sqm, garden_sqm, amenity text
 
     def __init__(
         self,
@@ -154,9 +155,18 @@ class SpectraAdapter:
 
         # ── Description text (if not already from JSON-LD) ──
         if not listing.description:
-            desc_el = soup.select_one("#property-description-wrap .block-content-wrap p")
-            if desc_el:
-                listing.description = desc_el.get_text(strip=True)
+            for sel in (
+                "#property-description-wrap .block-content-wrap p",
+                "#property-description-wrap p",
+                "#property-description-wrap .block-content-wrap",
+                "#property-description-wrap",
+                ".property-description p",
+                ".block-content-wrap p",
+            ):
+                desc_el = soup.select_one(sel)
+                if desc_el:
+                    listing.description = desc_el.get_text(strip=True)
+                    break
 
         # Garden sqm from description
         if listing.garden_sqm is None and listing.description:

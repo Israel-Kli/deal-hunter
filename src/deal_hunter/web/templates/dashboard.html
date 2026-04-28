@@ -9,7 +9,9 @@
   h1 { margin:0 0 16px; font-size:20px; }
   .bar { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
   input, select { background:#fff; color:#1a1a2e; border:1px solid #d1d5db; border-radius:6px; padding:6px 10px; font-size:14px; }
-  table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:12px; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+   table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:12px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+   thead tr:first-child th:first-child { border-top-right-radius:8px; }
+   thead tr:first-child th:last-child { border-top-left-radius:8px; }
   th, td { padding:4px 6px; border-bottom:1px solid #e5e7eb; text-align:right; vertical-align:middle; }
   th.col-fav, td.col-fav { width:2.25rem; max-width:2.35rem; padding:4px 2px; text-align:center; vertical-align:middle; }
   .fav-btn { background:none; border:none; cursor:pointer; font-size:17px; line-height:1; padding:2px; color:#cbd5e1; }
