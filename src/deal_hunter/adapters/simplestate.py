@@ -71,12 +71,20 @@ class SimplestateAdapter:
         prop_id = listing.source_payload.get("_property_id") or listing.source_payload.get("_id") or source_id
 
         url = f"{API_HOST}/api/business_view/{biz_id}/real_estate/property/{prop_id}"
-        data = fetch(url, headers=SIMPLESTATE_HEADERS)
-        if not isinstance(data, dict):
+        resp = fetch(url, headers=SIMPLESTATE_HEADERS)
+        if not isinstance(resp, dict):
+            log.debug("detail: non-dict response for %s (%s)", source_id, type(resp).__name__)
             return listing
 
-        body = data.get("body") or data
+        body = resp.get("body") or resp
         prop = (body.get("data") or {}) if isinstance(body, dict) else {}
+        # Fallback: if body.data is empty but body itself has property-level fields like 'size'
+        if isinstance(body, dict) and not prop:
+            if any(k in body for k in ("size", "description", "rooms", "field_size")):
+                prop = body
+            else:
+                log.info("detail: empty prop for %s — body keys=%s",
+                         source_id, sorted(body.keys())[:10] if isinstance(body, dict) else "N/A")
 
         if isinstance(prop, dict):
             desc = prop.get("description") or ""
@@ -91,14 +99,13 @@ class SimplestateAdapter:
             built = prop.get("size")
             if isinstance(built, (int, float)) and built > 0:
                 built_i = int(built)
-                if listing.sqm is None or built_i > listing.sqm:
-                    if listing.sqm is not None and built_i > listing.sqm:
-                        log.info(
-                            "detail: overriding sqm %d → %d for %s",
-                            listing.sqm, built_i, source_id,
-                        )
-                    listing.sqm = built_i
-                    listing.price_per_sqm = round(listing.price / built_i)
+                if listing.sqm is None:
+                    log.info("detail: set sqm=%d for %s from API size", built_i, source_id)
+                elif built_i > listing.sqm:
+                    log.info("detail: overriding sqm %d → %d for %s",
+                             listing.sqm, built_i, source_id)
+                listing.sqm = built_i
+                listing.price_per_sqm = round(listing.price / built_i)
             elif listing.sqm is None:
                 log.info("detail: API size field missing/null for %s (prop keys: %s)",
                          source_id, sorted(prop.keys()) if isinstance(prop, dict) else "N/A")
