@@ -24,7 +24,7 @@ _UNITS_DIVIDED_RE = re.compile(
     r"מחולק[ת]?\s*(?:ל[-\s]*)?"
     r"(\d{1,3})"
     r"[\s\u200e\u200f]*"
-    r"יחידות"
+    r"(?:יחידות|דירות)"
 )
 # Negative: "יחידות הורים" / "יחידות אורחים" etc. (internal suites, not separate housing)
 _UNITS_FALSE_POSITIVE_RE = re.compile(
@@ -32,6 +32,9 @@ _UNITS_FALSE_POSITIVE_RE = re.compile(
 )
 _GARDEN_RE = re.compile(
     r"(?:גינ[הת]|חצר)[^.\n]{0,40}?(\d{2,4})\s*" + _SQM
+)
+_LOT_RE = re.compile(
+    r"מגרש[^.\n]{0,30}?(\d{2,5})\s*" + _SQM
 )
 
 
@@ -95,3 +98,10 @@ def extract_features(listing: Listing) -> None:
             val = int(m.group(1))
             if 5 <= val <= 9999:
                 listing.garden_sqm = val
+
+    if listing.lot_sqm is None:
+        m = _LOT_RE.search(text)
+        if m:
+            val = int(m.group(1))
+            if 20 <= val <= 99999:
+                listing.lot_sqm = val
