@@ -27,7 +27,7 @@ def test_units_count_extracted():
 def test_units_count_singular():
     l = _listing("יחידת דיור אחת")
     extract_features(l)
-    assert l.units_count is None
+    assert l.units_count == 1
 
 
 def test_garden_sqm_extracted():
