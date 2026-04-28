@@ -259,6 +259,32 @@ def _make_handler(cfg: Config):
                 self.end_headers()
                 self.wfile.write(body)
                 return
+            if self.path == "/api/reset-source":
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                except ValueError:
+                    length = 0
+                raw = self.rfile.read(length) if length > 0 else b"{}"
+                try:
+                    data = json.loads(raw.decode("utf-8"))
+                except json.JSONDecodeError:
+                    self._write_json(400, {"status": "error", "error": "Invalid JSON"})
+                    return
+                source = data.get("source")
+                if not source:
+                    self._write_json(400, {"status": "error", "error": "source required"})
+                    return
+                with ListingsRepo(db_path) as repo:
+                    deleted = repo.reset_source(str(source))
+                payload = {"status": "ok", "source": source, "deleted": deleted}
+                body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if self.path == "/api/scan":
                 if _scan_in_progress[0]:
                     body = json.dumps({"status": "error", "error": "Scan already in progress"}, ensure_ascii=False).encode("utf-8")
@@ -268,18 +294,31 @@ def _make_handler(cfg: Config):
                     self.end_headers()
                     self.wfile.write(body)
                     return
-                def _run_scan():
+                scan_source = None
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                except ValueError:
+                    length = 0
+                if length > 0:
+                    raw = self.rfile.read(length)
+                    try:
+                        data = json.loads(raw.decode("utf-8"))
+                        scan_source = data.get("source")
+                    except (json.JSONDecodeError, UnicodeDecodeError):
+                        pass
+                def _run_scan(_src=scan_source):
                     _scan_in_progress[0] = True
                     try:
                         from deal_hunter.cli import run_once
-                        alerts = run_once(cfg, enrich=False)
+                        alerts = run_once(cfg, enrich=False, source=_src)
                         log.info("Manual scan completed: %d alerts", alerts)
-                    except Exception as e:
+                    except Exception:
                         log.exception("Manual scan failed")
                     finally:
                         _scan_in_progress[0] = False
                 threading.Thread(target=_run_scan, daemon=True).start()
-                payload = {"status": "ok", "summary": "Scan started. Refresh page when done."}
+                summary = "Scan started for " + (scan_source or "all sources") + ". Refresh page when done."
+                payload = {"status": "ok", "summary": summary}
                 body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")

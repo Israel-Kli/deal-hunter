@@ -127,6 +127,7 @@
     <button type="button" class="btn btn-refresh" onclick="load()">רענן</button>
     <button type="button" id="scanBtn" class="btn btn-scan" onclick="triggerScan()">🔍 סריקה ידנית</button>
     <button type="button" id="resetBtn" class="btn btn-reset" onclick="resetDb()">🔄 איפוס DB</button>
+    <span id="sourceActionHint" class="muted" style="font-size:11px;"></span>
   </div>
   <div class="scoring-info">
     <b>ציון (1–10):</b>
@@ -608,6 +609,7 @@ function toggleSourceFilter(btn) {
     activeSources.clear();
     container.querySelectorAll('.src-chip').forEach(function(b) { b.classList.remove('active'); b.style.backgroundColor = ''; b.style.color = ''; });
     container.querySelector('.src-chip-all').classList.add('active');
+    updateActionButtons();
     render();
     return;
   }
@@ -625,33 +627,69 @@ function toggleSourceFilter(btn) {
     btn.classList.add('active');
     btn.style.backgroundColor = btn.style.getPropertyValue('--chip-color');
   }
+  updateActionButtons();
   render();
 }
+function getSelectedSource() {
+  if (activeSources.size === 1) return Array.from(activeSources)[0];
+  return null;
+}
+function updateActionButtons() {
+  const src = getSelectedSource();
+  const resetBtn = document.getElementById('resetBtn');
+  const scanBtn = document.getElementById('scanBtn');
+  const hint = document.getElementById('sourceActionHint');
+  if (src) {
+    const label = sourceSiteTitle(src);
+    resetBtn.textContent = '🔄 איפוס ' + label;
+    scanBtn.textContent = '🔍 סריקת ' + label;
+    hint.textContent = 'פועל על: ' + label;
+  } else {
+    resetBtn.textContent = '🔄 איפוס DB';
+    scanBtn.textContent = '🔍 סריקה ידנית';
+    hint.textContent = activeSources.size > 1 ? 'פועל על: נבחרו ' + activeSources.size + ' מקורות' : '';
+  }
+}
 async function resetDb() {
-  if (!confirm('לאפס את כל הנתונים ב-DB? פעולה זו תמחק את כל הרשומות.')) return;
+  const src = getSelectedSource();
+  const label = src ? sourceSiteTitle(src) : null;
+  const msg = src
+    ? 'לאפס את כל הנתונים של ' + label + '? פעולה זו תמחק את כל הרשומות מהמקור הזה.'
+    : 'לאפס את כל הנתונים ב-DB? פעולה זו תמחק את כל הרשומות.';
+  if (!confirm(msg)) return;
   const btn = document.getElementById('resetBtn');
   btn.disabled = true;
   btn.textContent = '⏳ מאפס...';
   try {
-    const r = await fetch('/api/reset', {method: 'POST'});
+    const url = src ? '/api/reset-source' : '/api/reset';
+    const opts = src
+      ? {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source: src})}
+      : {method: 'POST'};
+    const r = await fetch(url, opts);
     const d = await r.json();
     if (d.status === 'ok') {
-      alert('ה-DB אופס בהצלחה. הפעל סריקה מחדש.');
+      const count = d.deleted.listings || 0;
+      alert((label || 'ה-DB') + ' אופס בהצלחה. נמחקו ' + count + ' מודעות. הפעל סריקה מחדש.');
       load();
     }
   } catch(e) {
     alert('שגיאה באיפוס: ' + e.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = '🔄 איפוס DB';
+    updateActionButtons();
   }
 }
 async function triggerScan() {
+  const src = getSelectedSource();
+  const label = src ? sourceSiteTitle(src) : null;
   const btn = document.getElementById('scanBtn');
   btn.disabled = true;
   btn.textContent = '⏳ סורק...';
   try {
-    const r = await fetch('/api/scan', {method: 'POST'});
+    const opts = src
+      ? {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source: src})}
+      : {method: 'POST'};
+    const r = await fetch('/api/scan', opts);
     const d = await r.json();
     if (d.status === 'ok') {
       alert('סריקה הושלמה: ' + d.summary);
@@ -663,7 +701,7 @@ async function triggerScan() {
     alert('שגיאה בסריקה: ' + e.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = '🔍 סריקה ידנית';
+    updateActionButtons();
   }
 }
 function doSort(key) {
@@ -771,6 +809,7 @@ document.getElementById('q').addEventListener('input', render);
 document.getElementById('agentType').addEventListener('change', render);
 document.querySelectorAll('th.sort').forEach(th => th.addEventListener('click', () => doSort(th.dataset.key)));
 buildSourceChips();
+updateActionButtons();
 load();
 setInterval(load, 30000);
 </script>

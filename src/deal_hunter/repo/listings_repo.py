@@ -356,6 +356,27 @@ class ListingsRepo:
             "scan_log": deleted_scan_log,
         }
 
+    def reset_source(self, source: str) -> dict[str, int]:
+        deleted_listings = self.conn.execute(
+            "DELETE FROM listings WHERE source=?", (source,)
+        ).rowcount
+        deleted_history = self.conn.execute(
+            "DELETE FROM price_history WHERE source=?", (source,)
+        ).rowcount
+        deleted_scan_log = self.conn.execute(
+            "DELETE FROM scan_log WHERE source=?", (source,)
+        ).rowcount
+        self.conn.commit()
+        log.info(
+            "DB reset source=%s: %d listings, %d price_history, %d scan_log",
+            source, deleted_listings, deleted_history, deleted_scan_log,
+        )
+        return {
+            "listings": deleted_listings,
+            "price_history": deleted_history,
+            "scan_log": deleted_scan_log,
+        }
+
     # ---- comps ---------------------------------------------------------
 
     def upsert_comps(self, provider: str, comps: Iterable[dict[str, Any]]) -> int:

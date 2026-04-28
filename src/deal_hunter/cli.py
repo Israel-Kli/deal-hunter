@@ -210,10 +210,18 @@ def _scan_adapter(
     return result
 
 
-def run_once(cfg: cfg_mod.Config, *, enrich: bool = False, max_items: int | None = None) -> int:
-    """Scrape, score, upsert, dedup, alert. Returns number of alerts sent/logged."""
+def run_once(cfg: cfg_mod.Config, *, enrich: bool = False, max_items: int | None = None, source: str | None = None) -> int:
+    """Scrape, score, upsert, dedup, alert. Returns number of alerts sent/logged.
+
+    If *source* is given only that adapter runs (e.g. ``"yad2"``).
+    """
     db_path = Path(cfg.data_dir) / "deal-hunter.db"
     adapters = _adapters(cfg)
+    if source:
+        adapters = [a for a in adapters if a.source == source]
+        if not adapters:
+            log.warning("Source %r not enabled or unknown, nothing to scan", source)
+            return 0
     if not adapters:
         log.warning("No adapters enabled, nothing to scan")
         return 0
@@ -283,7 +291,7 @@ def run_once(cfg: cfg_mod.Config, *, enrich: bool = False, max_items: int | None
 def cmd_run(args: argparse.Namespace) -> int:
     cfg = cfg_mod.load(args.config)
     if args.once:
-        run_once(cfg, enrich=args.enrich, max_items=args.max_items)
+        run_once(cfg, enrich=args.enrich, max_items=args.max_items, source=getattr(args, 'source', None))
         return 0
 
     from apscheduler.schedulers.blocking import BlockingScheduler
@@ -462,6 +470,7 @@ def main() -> int:
     run_p.add_argument("--once", action="store_true", help="Run one cycle and exit")
     run_p.add_argument("--enrich", action="store_true", help="Fetch detail pages (slower)")
     run_p.add_argument("--max-items", type=int, default=None, help="Cap listings per source (dev)")
+    run_p.add_argument("--source", default=None, help="Only scan a single source (e.g. yad2, onmap, ad)")
     run_p.set_defaults(func=cmd_run)
 
     comps_p = sub.add_parser("comps", help="Comps management")
