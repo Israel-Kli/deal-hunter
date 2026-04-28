@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-Source = Literal["yad2", "madlan", "onmap", "ad", "reariel", "spectra", "nadlanh", "simplestate"]
+Source = Literal["yad2", "madlan", "onmap", "ad", "reariel", "spectra", "nadlanh", "simplestate", "komo"]
 
 
 class Listing(BaseModel):
