@@ -195,11 +195,11 @@ function sourceSiteTitle(source) {
   return t[source] || source || 'מודעה';
 }
 function sourceFallbackColor(source) {
-  const c = { yad2:'#e74c3c', madlan:'#3b82f6', onmap:'#22c55e', ad:'#8b5cf6', reariel:'#ef4444', spectra:'#14b8a6', nadlanh:'#ec4899', simplestate:'#6b7280' };
+  const c = { yad2:'#e74c3c', madlan:'#3b82f6', onmap:'#22c55e', ad:'#8b5cf6', reariel:'#ef4444', spectra:'#14b8a6', nadlanh:'#ec4899', simplestate:'#6b7280', komo:'#f59e0b' };
   return c[source] || '#9ca3af';
 }
 function sourceFallbackLetter(source) {
-  const l = { yad2:'Y', madlan:'M', onmap:'O', ad:'A', reariel:'R', spectra:'S', nadlanh:'N', simplestate:'S' };
+  const l = { yad2:'Y', madlan:'M', onmap:'O', ad:'A', reariel:'R', spectra:'S', nadlanh:'N', simplestate:'S', komo:'K' };
   return l[source] || (source ? source.charAt(0).toUpperCase() : '?');
 }
 function sourceIconHtml(source) {

@@ -16,6 +16,7 @@ from deal_hunter.adapters.nadlanh import NadlanhAdapter
 from deal_hunter.adapters.onmap import OnMapAdapter
 from deal_hunter.adapters.reariel import RearielAdapter
 from deal_hunter.adapters.simplestate import SimplestateAdapter
+from deal_hunter.adapters.komo import KomoAdapter
 from deal_hunter.adapters.spectra import SpectraAdapter
 from deal_hunter.adapters.yad2 import Yad2Adapter
 from deal_hunter.ai_mapper import extract_batch as ai_extract_batch
@@ -110,6 +111,17 @@ def _adapters(cfg: cfg_mod.Config):
                 business_ids=[877],  # מפתח העיר — Mafteach Ha'Ir
                 search=cfg.search.model_dump(),
                 page_size=100,
+                request_delay_sec=cfg.schedule.delay_between_requests_sec,
+            )
+        )
+    if cfg.sources.komo:
+        komo_cities = [c.hebrew_name for c in cfg.cities if c.hebrew_name]
+        allowed_cities = [c.hebrew_name for c in cfg.cities if c.hebrew_name]
+        out.append(
+            KomoAdapter(
+                cities=komo_cities,
+                search=cfg.search.model_dump(),
+                allowed_cities=allowed_cities,
                 request_delay_sec=cfg.schedule.delay_between_requests_sec,
             )
         )

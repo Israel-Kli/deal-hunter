@@ -45,6 +45,7 @@ class SourcesCfg(BaseModel):
     spectra: bool = False
     nadlanh: bool = False
     simplestate: bool = False
+    komo: bool = False
 
 
 class CompsCfg(BaseModel):
