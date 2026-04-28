@@ -157,7 +157,7 @@
         <th class="col-desc">תיאור</th>
         <th class="col-num sort" data-key="rooms_eff">חדרים</th>
         <th class="col-num sort" data-key="units_count_eff">יחידות דיור</th>
-        <th class="col-num sort" data-key="sqm_eff">מגרש</th>
+        <th class="col-num sort" data-key="lot_sqm_eff">מגרש</th>
         <th class="col-num sort" data-key="sqm_build_eff">מ"ר בנוי</th>
         <th class="col-num sort" data-key="garden_sqm_eff">גינה (מ״ר)</th>
         <th class="col-price sort" data-key="price">מחיר</th>
@@ -753,7 +753,7 @@ function render() {
       '<td class="col-desc"><div class="desc-stack">' + notesEditor + '</div></td>' +
       '<td class="col-num">' + editCellHtml(l, 'rooms', 'rooms_eff', 'rooms', true) + '</td>' +
       '<td class="col-num">' + editCellHtml(l, 'units_count', 'units_count_eff', 'units_count') + '</td>' +
-      '<td class="col-num">' + editCellHtml(l, 'sqm', 'sqm_eff', 'sqm') + '</td>' +
+      '<td class="col-num">' + editCellHtml(l, 'lot_sqm', 'lot_sqm_eff', 'lot_sqm') + '</td>' +
       '<td class="col-num">' + editCellHtml(l, 'sqm_build', 'sqm_build_eff', 'sqm_build') + '</td>' +
       '<td class="col-num">' + editCellHtml(l, 'garden_sqm', 'garden_sqm_eff', 'garden_sqm') + '</td>' +
       '<td class="col-price">₪' + (l.price || 0).toLocaleString() + '</td>' +

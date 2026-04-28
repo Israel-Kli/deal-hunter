@@ -454,9 +454,12 @@ _LOT_RE = re.compile(
     r"(?:מגרש|קרקע|המגרש)[^.\n]{0,80}?(\d{3,5})\s*(?:מ[״\"']?ר|מטר)",
 )
 _GARDEN_RE = re.compile(
-    r"(?:גינ[הת]|חצר)[^.\n]{0,40}?(\d{2,4})\s*מ[״\"']?ר",
+    r"(?:"
+    r"(?:גינ[הת]|חצר)[^.\n]{0,40}?(\d{2,4})\s*מ[״\"'׳]?ר"       # גינה … X מ״ר
+    r"|"
+    r"(\d{2,4})\s*מ[״\"'׳]?ר[^.\n]{0,30}?(?:גינ[הת]|חצר)"       # X מ״ר … גינה
+    r")",
 )
-
 
 def _extract_rooms_from_texts(texts: Iterable[str]) -> float | None:
     for txt in texts:
@@ -492,7 +495,9 @@ def _extract_lot_sqm(text: str) -> int | None:
 def _extract_garden_sqm(text: str) -> int | None:
     m = _GARDEN_RE.search(text)
     if m:
-        val = int(m.group(1))
-        if 5 <= val <= 9999:
-            return val
+        val_s = m.group(1) or m.group(2)
+        if val_s:
+            val = int(val_s)
+            if 5 <= val <= 9999:
+                return val
     return None

@@ -114,6 +114,9 @@ class SpectraAdapter:
             for strong in rows:
                 label = strong.get_text(strip=True)
                 value_el = strong.find_next_sibling("span")
+                if value_el is None:
+                    parent = strong.parent
+                    value_el = parent.find("span") if parent else None
                 value = value_el.get_text(strip=True) if value_el else ""
                 if "מגרש" in label:
                     listing.lot_sqm = listing.lot_sqm or _first_int(value)
@@ -289,6 +292,12 @@ class SpectraAdapter:
 
         # ---- Address parts ----
         street, house_number, neighborhood, city = _parse_address(address)
+
+        # Spectra catalogs show cross-city listings (e.g. Barkan on Ariel page).
+        # Only keep listings from the intended city.
+        if city != "אריאל":
+            log.debug("Spectra filtered: reason=wrong_city hz_id=%s city=%s", hz_id, city)
+            return None, "wrong_city"
 
         log.debug("Spectra parsed: hz_id=%s price=%d rooms=%s sqm=%s city=%s type=%s", hz_id, price, rooms_f, sqm_i, city, listing_type)
 

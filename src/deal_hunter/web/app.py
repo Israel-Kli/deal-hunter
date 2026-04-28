@@ -12,6 +12,7 @@ from deal_hunter.config import Config
 from deal_hunter.dedup.canonicalizer import load_existing_groups
 from deal_hunter.effective import (
     effective_garden_sqm,
+    effective_lot_sqm,
     effective_price_per_sqm,
     effective_rooms,
     effective_sqm,
@@ -236,6 +237,7 @@ def _make_handler(cfg: Config):
                     "sqm_build_eff": effective_sqm_build(row),
                     "units_count_eff": effective_units(row),
                     "garden_sqm_eff": effective_garden_sqm(row),
+                    "lot_sqm_eff": effective_lot_sqm(row),
                     "price_per_sqm_eff": effective_price_per_sqm(row),
                 }, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)

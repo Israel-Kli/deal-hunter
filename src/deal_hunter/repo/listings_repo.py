@@ -15,6 +15,7 @@ from typing import Any, Iterable
 from deal_hunter.dates import earliest_yyyy_mm_dd
 from deal_hunter.effective import (
     effective_garden_sqm,
+    effective_lot_sqm,
     effective_price_per_sqm,
     effective_rooms,
     effective_sqm,
@@ -312,6 +313,7 @@ class ListingsRepo:
             d["sqm_build_eff"] = effective_sqm_build(d)
             d["units_count_eff"] = effective_units(d)
             d["garden_sqm_eff"] = effective_garden_sqm(d)
+            d["lot_sqm_eff"] = effective_lot_sqm(d)
             d["price_per_sqm_eff"] = effective_price_per_sqm(d)
             out.append(d)
         return out
