@@ -210,6 +210,10 @@ class Yad2Adapter:
 
         log.debug("Yad2 parsed: token=%s price=%d rooms=%s sqm=%s city=%s neighborhood=%s", token, price, rooms, size, city_name, neighborhood)
         pub_s = publish_date.strftime("%Y-%m-%d") if publish_date else ""
+        desc = item.get("description") or item.get("text") or item.get("info") or ""
+        if not desc:
+            desc = meta.get("description", "") or meta.get("text", "") or ""
+        desc = _html.unescape(desc.strip()) if desc else ""
         return Listing(
             source="yad2",
             source_id=token,
@@ -234,6 +238,7 @@ class Yad2Adapter:
             ac="מיזוג" in tl or "מזגן" in tl,
             mamad='ממ"ד' in tl or "ממד" in tl,
             renovated="משופצת" in tl or "שיפוץ" in tl,
+            description=desc,
             images=images,
             tags=[t.get("name", "") for t in tags_raw if isinstance(t, dict)],
             lat=coords.get("lat"),
