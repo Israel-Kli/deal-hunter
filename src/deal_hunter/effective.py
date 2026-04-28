@@ -24,7 +24,16 @@ def effective_sqm_build(obj: dict[str, Any] | Any) -> int | None:
         if not isinstance(obj, dict)
         else obj.get("sqm_build_user")
     )
-    return b_u if b_u is not None else b
+    if b_u is not None:
+        return b_u
+    if b is not None:
+        return b
+    sqm = (
+        getattr(obj, "sqm", None)
+        if not isinstance(obj, dict)
+        else obj.get("sqm")
+    )
+    return sqm
 
 
 def effective_units(obj: dict[str, Any] | Any) -> int | None:
@@ -39,6 +48,20 @@ def effective_units(obj: dict[str, Any] | Any) -> int | None:
         else obj.get("units_count_user")
     )
     return u_u if u_u is not None else u
+
+
+def effective_lot_sqm(obj: dict[str, Any] | Any) -> int | None:
+    l = (
+        getattr(obj, "lot_sqm", None)
+        if not isinstance(obj, dict)
+        else obj.get("lot_sqm")
+    )
+    l_u = (
+        getattr(obj, "lot_sqm_user", None)
+        if not isinstance(obj, dict)
+        else obj.get("lot_sqm_user")
+    )
+    return l_u if l_u is not None else l
 
 
 def effective_garden_sqm(obj: dict[str, Any] | Any) -> int | None:

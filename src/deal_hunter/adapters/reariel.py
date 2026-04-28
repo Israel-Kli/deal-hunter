@@ -258,6 +258,7 @@ class RearielAdapter:
             address=address,
             rooms=rooms_f,
             sqm=sqm_i,
+            sqm_build=sqm_i,
             price=price,
             price_per_sqm=round(price / sqm_i) if sqm_i else None,
             listing_type=asset_type,

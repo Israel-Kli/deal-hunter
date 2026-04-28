@@ -271,6 +271,7 @@ class AdAdapter:
             address=", ".join(x for x in [street, neighborhood, city] if x),
             rooms=rooms,
             sqm=sqm,
+            sqm_build=sqm,
             floor=None,  # not on feed cards; enrich via detail
             price=price,
             price_per_sqm=round(price / sqm) if sqm else None,
