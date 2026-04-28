@@ -51,6 +51,7 @@ _MOREDETAILS_RE = re.compile(
 
 class KomoAdapter:
     source = "komo"
+    enrich_always = True  # detail page has full description
 
     def __init__(
         self,
