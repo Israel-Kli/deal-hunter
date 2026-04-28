@@ -62,6 +62,14 @@ def _extract_units_count(text: str) -> int | None:
         if has_separator:
             return len(unit_mentions)
 
+    # Single "יחידת דיור" without a count — likely 1 unit (e.g. "יש יחידת דיור מניבה")
+    if len(unit_mentions) == 1:
+        single = re.search(r"(?:^|[\s\u200e\u200f])(?:ו)?יחידת\s+דיור", text)
+        if single:
+            before = text[max(0, single.start() - 40):single.start()]
+            if not re.search(r"(?:ללא|אין|אינו|איננו|לא\s+(?:כולל|מכיל|יש|קיים|נכלל))\b", before):
+                return 1
+
     return None
 
 
