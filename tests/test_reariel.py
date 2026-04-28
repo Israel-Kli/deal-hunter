@@ -6,7 +6,7 @@ from pathlib import Path
 
 from bs4 import BeautifulSoup
 
-from deal_hunter.adapters.reariel import RearielAdapter, _parse_address, _extract_lot_sqm, _extract_garden_sqm
+from deal_hunter.adapters.reariel import RearielAdapter, _parse_address, _extract_lot_sqm, _extract_garden_sqm, _is_sqm_label
 
 FIXTURE = Path(__file__).parent / "fixtures" / "reariel_feed.html"
 
@@ -105,6 +105,17 @@ def test_extract_garden_sqm():
     assert _extract_garden_sqm("גינה ענקית של 120 מ\"ר") == 120
     assert _extract_garden_sqm("חצר קטנה") is None
     assert _extract_garden_sqm("אין גינה") is None
+
+
+def test_is_sqm_label():
+    assert _is_sqm_label("מ״ר") is True
+    assert _is_sqm_label('מ"ר') is True
+    assert _is_sqm_label("שטח דירה") is True
+    assert _is_sqm_label("מטר") is True
+    assert _is_sqm_label("מ'") is True
+    assert _is_sqm_label("חדרים") is False
+    assert _is_sqm_label("") is False
+    assert _is_sqm_label("קומה") is False
 
 
 def test_reariel_city_filter_allowed():

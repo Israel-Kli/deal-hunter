@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from deal_hunter.adapters.simplestate import SimplestateAdapter, _extract_built_sqm, _extract_lot_sqm, _extract_garden_sqm
+from deal_hunter.adapters.simplestate import SimplestateAdapter, _extract_built_sqm, _extract_lot_sqm, _extract_garden_sqm, _extract_units_count
 
 FIXTURE = Path(__file__).parent / "fixtures" / "simplestate_feed_877.json"
 
@@ -115,6 +115,45 @@ def test_extract_built_not_captured_by_other():
     assert _extract_built_sqm("מגרש 500 מ\"ר") is None
     assert _extract_built_sqm("גינה 120 מ\"ר") is None
     assert _extract_built_sqm("חצר 80 מ\"ר") is None
+
+
+def test_extract_built_sqm_number_after_unit():
+    """'בנוי מ\"ר 250' should be parsed (number after unit)."""
+    assert _extract_built_sqm("בנוי מ\"ר 250") == 250
+    assert _extract_built_sqm("מגרש מ\"ר 440, בנוי מ\"ר 250") == 250
+    assert _extract_built_sqm("בנוי מ״ר 180") == 180
+
+
+def test_extract_lot_sqm_number_after_unit():
+    """'מגרש מ\"ר 440' should be parsed (number after unit)."""
+    assert _extract_lot_sqm("מגרש מ\"ר 440") == 440
+    assert _extract_lot_sqm("קרקע מ\"ר 500") == 500
+    assert _extract_lot_sqm("המגרש מ\"ר 607") == 607
+
+
+def test_extract_lot_sqm_not_captured_by_built():
+    """Lot sqm patterns shouldn't be captured by built sqm extraction."""
+    text = "מגרש מ\"ר 440, בנוי מ\"ר 250"
+    assert _extract_built_sqm(text) == 250
+    assert _extract_lot_sqm(text) == 440
+
+
+def test_extract_units_count_singular():
+    """'יחידת דיור' singular → units_count=1."""
+    assert _extract_units_count("הנכס כולל יחידת דיור בנויה") == 1
+    assert _extract_units_count("5 חדרים פלוס יחידת דיור") == 1
+
+
+def test_extract_units_count_multiple():
+    """'X יחידות דיור' → units_count=X."""
+    assert _extract_units_count("נכס מחולק ל-3 יחידות דיור מניבות") == 3
+    assert _extract_units_count("מחולק ל2 יחידות דיור") == 2
+
+
+def test_extract_units_count_none():
+    """No housing unit mention → None."""
+    assert _extract_units_count("דירה יפה 4 חדרים") is None
+    assert _extract_units_count("") is None
 
 
 def test_detail_enrichment_reads_structured_fields():

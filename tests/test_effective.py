@@ -51,8 +51,8 @@ def test_garden_sqm_prefers_user():
     assert effective_garden_sqm(d) == 80
 
 
-def test_price_per_sqm_derived_from_effective_sqm():
-    d = {"price": 1_000_000, "sqm": 100, "sqm_user": 80}
+def test_price_per_sqm_derived_from_effective_sqm_build():
+    d = {"price": 1_000_000, "sqm_build": 100, "sqm_build_user": 80}
     assert effective_price_per_sqm(d) == 12500
 
 

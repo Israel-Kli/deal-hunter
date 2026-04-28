@@ -85,6 +85,7 @@ class SimplestateAdapter:
                     listing.description = desc
                 listing.lot_sqm = listing.lot_sqm or _extract_lot_sqm(desc)
                 listing.garden_sqm = listing.garden_sqm or _extract_garden_sqm(desc)
+                listing.units_count = listing.units_count or _extract_units_count(desc)
 
             # Structured fields from detail API
             built = prop.get("size")
@@ -224,11 +225,12 @@ class SimplestateAdapter:
         full_address = item.get("full_address") or item.get("address_display") or ""
         address = ", ".join(filter(None, [full_address or f"{street}, {neighborhood}, {city}"]))
 
-        # Description (mine for sqm / lot)
+        # Description (mine for sqm / lot / units)
         description = item.get("description") or ""
         sqm_i = _extract_built_sqm(description)
         lot_sqm = _extract_lot_sqm(description)
         garden_sqm = _extract_garden_sqm(description)
+        units_count = _extract_units_count(description)
 
         if s.get("min_sqm") and sqm_i and sqm_i < s["min_sqm"]:
             log.debug("Simplestate filtered: reason=sqm_too_small prop_id=%s sqm=%s min=%s", prop_id, sqm_i, s["min_sqm"])
@@ -283,6 +285,7 @@ class SimplestateAdapter:
             tags=tags,
             lot_sqm=lot_sqm,
             garden_sqm=garden_sqm,
+            units_count=units_count,
             source_payload={
                 "_business_id": biz_id,
                 "_property_id": prop_id,
@@ -300,10 +303,17 @@ _SQM_BUILT_RE = re.compile(
     r"(?P<sqm2>\d{2,4})\s*(?:מ[״\"']?ר|מטר)\s*בנוי"
     r"|"
     r"בנוי\s*(?:של\s*)?(?P<sqm3>\d{2,4})"
+    r"|"
+    r"בנוי\s*מ[״\"']?ר\s*(?P<sqm4>\d{2,4})"
     r")\s*(?:מ[״\"']?ר|מטר)?"
 )
 _LOT_RE = re.compile(
-    r"(?:מגרש|קרקע|המגרש)[^.\n]{0,80}?(\d{3,5})\s*(?:מ[״\"']?ר|מטר)",
+    r"(?:מגרש|קרקע|המגרש)"
+    r"(?:"
+    r"[^.\n]{0,80}?(\d{3,5})\s*(?:מ[״\"']?ר|מטר)"
+    r"|"
+    r"\s*מ[״\"']?ר\s*(\d{3,5})"
+    r")",
 )
 _GARDEN_RE = re.compile(
     r"(?:גינ[הת]|חצר)[^.\n]{0,40}?(\d{2,4})\s*מ[״\"']?ר",
@@ -313,7 +323,7 @@ _GARDEN_RE = re.compile(
 def _extract_built_sqm(text: str) -> int | None:
     m = _SQM_BUILT_RE.search(text)
     if m:
-        val_s = m.group("sqm1") or m.group("sqm2") or m.group("sqm3")
+        val_s = m.group("sqm1") or m.group("sqm2") or m.group("sqm3") or m.group("sqm4")
         if val_s:
             val = int(val_s)
             if 10 <= val <= 9999:
@@ -324,7 +334,9 @@ def _extract_built_sqm(text: str) -> int | None:
 def _extract_lot_sqm(text: str) -> int | None:
     m = _LOT_RE.search(text)
     if m:
-        return int(m.group(1))
+        val_s = m.group(1) or m.group(2)
+        if val_s:
+            return int(val_s)
     return None
 
 
@@ -334,4 +346,13 @@ def _extract_garden_sqm(text: str) -> int | None:
         val = int(m.group(1))
         if 5 <= val <= 9999:
             return val
+    return None
+
+
+def _extract_units_count(text: str) -> int | None:
+    m = re.search(r"(?:מחולק[^.\n]*?ל[-\s]*)?(\d+)\s*יחידות\s*דיור", text)
+    if m:
+        return int(m.group(1))
+    if re.search(r"\b" + re.escape("יחידת") + r"\s*דיור\b", text):
+        return 1
     return None
