@@ -7,8 +7,19 @@
   :root { color-scheme: light; }
   body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:#f5f7fa; color:#1a1a2e; margin:0; padding:20px; }
   h1 { margin:0 0 16px; font-size:20px; }
-  .bar { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
-  input, select { background:#fff; color:#1a1a2e; border:1px solid #d1d5db; border-radius:6px; padding:6px 10px; font-size:14px; }
+   .bar { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+   input, select { background:#fff; color:#1a1a2e; border:1px solid #d1d5db; border-radius:6px; padding:6px 10px; font-size:14px; }
+   .src-chips { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+   .src-chip { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:20px; border:1px solid #d1d5db; background:#fff; cursor:pointer; font-size:12px; color:#374151; transition:all .15s; user-select:none; flex-shrink:0; font-family:inherit; }
+   .src-chip:hover { border-color:#9ca3af; background:#f9fafb; }
+   .src-chip.active { color:#fff; border-color:transparent; }
+   .src-chip .src-chip-icon { width:16px; height:16px; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+   .src-chip .src-chip-icon img { width:16px; height:16px; object-fit:contain; }
+   .src-chip .src-chip-icon .src-fallback { font-size:9px; font-weight:700; text-align:center; line-height:16px; border-radius:2px; color:#fff; }
+   .src-chip-all { border:1px dashed #d1d5db; background:#f9fafb; }
+   .src-chip-all.active { background:#1a1a2e; color:#fff; border-color:#1a1a2e; }
+   .table-header { display:flex; align-items:baseline; gap:12px; margin-bottom:6px; flex-wrap:wrap; }
+   .table-title { font-size:15px; font-weight:600; color:#1a1a2e; white-space:nowrap; }
    table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:12px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.08); }
    thead tr:first-child th:first-child { border-top-right-radius:8px; }
    thead tr:first-child th:last-child { border-top-left-radius:8px; }
@@ -105,16 +116,9 @@
 </head>
 <body>
   <h1>deal-hunter</h1>
-  <div class="meta muted" id="meta"></div>
   <div class="bar">
     <input id="q" placeholder="חיפוש טקסט..." />
-    <select id="src">
-      <option value="">כל המקורות</option>
-      <option value="yad2">Yad2</option>
-      <option value="madlan">Madlan</option>
-      <option value="onmap">OnMap</option>
-      <option value="ad">ad.co.il</option>
-    </select>
+    <div class="src-chips" id="srcChips"></div>
     <select id="agentType">
       <option value="">הכל</option>
       <option value="private">פרטי בלבד</option>
@@ -135,6 +139,10 @@
     מו״מ — ירידת מחיר |
     סיכון — מחיר גבוה מאוד (נזילות) |
     <b>לחץ על תא מגרש/בנוי/יחידות/גינה לעריכה</b>
+  </div>
+  <div class="table-header">
+    <div class="table-title">📋 תוצאות</div>
+    <div class="meta muted" id="meta"></div>
   </div>
   <table>
     <thead>
@@ -185,13 +193,13 @@ function scoreClass(s) {
   return 's-cold';
 }
 function sourceFaviconUrl(source) {
-  const hostBy = { yad2: 'yad2.co.il', madlan: 'madlan.co.il', onmap: 'onmap.co.il', ad: 'ad.co.il' };
+  const hostBy = { yad2: 'yad2.co.il', madlan: 'madlan.co.il', onmap: 'onmap.co.il', ad: 'ad.co.il', reariel: 'reariel.co.il', spectra: 'spectra-nadlan.co.il', nadlanh: 'nadlanh.co.il', simplestate: 'simplestate.me', komo: 'komo.co.il' };
   const host = hostBy[source];
   if (!host) return '';
   return 'https://www.google.com/s2/favicons?sz=32&domain=' + host;
 }
 function sourceSiteTitle(source) {
-  const t = { yad2: 'Yad2', madlan: 'Madlan', onmap: 'OnMap', ad: 'ad.co.il' };
+  const t = { yad2: 'Yad2', madlan: 'Madlan', onmap: 'OnMap', ad: 'ad.co.il', reariel: 'Reariel', spectra: 'Spectra', nadlanh: 'NadlanH', simplestate: 'SimpleState', komo: 'Komo' };
   return t[source] || source || 'מודעה';
 }
 function sourceFallbackColor(source) {
@@ -236,7 +244,6 @@ function fmtScoreReasons(reasons) {
     price_vs_market: 'מחיר מול שוק',
     price_vs_market_delta: 'שינוי ציון (מחיר)',
     price_per_sqm_used: '₪/מ״ר בפועל',
-    amenity_bonus: 'בונוס מתקנים',
     seller_channel: 'סוג מוכר',
     seller_adjustment: 'התאמת מוכר',
     price_drop_pct: 'ירידת מחיר',
@@ -251,8 +258,6 @@ function fmtScoreReasons(reasons) {
     units_count_used: 'יחידות דיור (נספר)',
     garden_bonus: 'בונוס מגרש/גינה',
     garden_bonus_source: 'מקור מגרש/גינה',
-    room_layout_bonus: 'בונוס חדרים',
-    outdoor_rooms_bonus: 'סה״כ גינה+חדרים',
     matched_garden_phrases: 'ביטויי גינה',
     garden_sqm_used: 'גינה (מ״ר)',
     final: 'ציון סופי',
@@ -264,14 +269,11 @@ function fmtScoreReasons(reasons) {
     private: 'פרטי',
     structured: 'מפורש',
     description: 'תיאור',
-    'exceptional (>15% below band)': 'מצוין (>15% מתחת לטווח)',
     'below band': 'מתחת לטווח',
-    'below midpoint': 'מתחת לאמצע הטווח',
     'in band': 'בתוך הטווח',
     'above band': 'מעל הטווח',
-    'much above band': 'הרבה מעל הטווח',
   };
-  const priority = ['market_band','market_band_source','price_vs_market_delta','price_vs_market','price_per_sqm_used','description_unit_hit','matched_unit_phrases','description_unit_adjustment','description_unit_source','units_count_used','garden_bonus','garden_bonus_source','room_layout_bonus','outdoor_rooms_bonus','matched_garden_phrases','lot_sqm_used','garden_sqm_used','amenity_bonus','seller_channel','seller_adjustment','price_drop_pct','price_drop_bonus','risk_liquidity'];
+  const priority = ['market_band','market_band_source','price_vs_market_delta','price_vs_market','price_per_sqm_used','description_unit_hit','matched_unit_phrases','description_unit_adjustment','description_unit_source','units_count_used','garden_bonus','garden_bonus_source','matched_garden_phrases','lot_sqm_used','garden_sqm_used','seller_channel','seller_adjustment','price_drop_pct','price_drop_bonus','risk_liquidity'];
   const entries = Object.entries(reasons).filter(([k]) => k !== 'final');
   entries.sort((a, b) => {
     const ia = priority.indexOf(a[0]);
@@ -572,6 +574,59 @@ async function load() {
   document.getElementById('meta').textContent = metaText;
   render();
 }
+let activeSources = new Set();
+function buildSourceChips() {
+  const srcs = ['yad2', 'madlan', 'onmap', 'ad', 'reariel', 'spectra', 'nadlanh', 'simplestate', 'komo'];
+  const container = document.getElementById('srcChips');
+  let html = '<button type="button" class="src-chip src-chip-all active" data-src="__all__" onclick="toggleSourceFilter(this)">הכל</button>';
+  for (const s of srcs) {
+    const color = sourceFallbackColor(s);
+    const iconUrl = sourceFaviconUrl(s);
+    const fbl = sourceFallbackLetter(s);
+    let iconHtml;
+    if (iconUrl) {
+      iconHtml = '<img src="' + escapeHtml(iconUrl) + '" alt="" width="16" height="16" loading="lazy" referrerpolicy="no-referrer" decoding="async" data-source="' + escapeHtml(s) + '" onerror="handleChipFaviconError(this)">';
+    } else {
+      iconHtml = '<span class="src-fallback" style="background:' + color + '">' + escapeHtml(fbl) + '</span>';
+    }
+    html += '<button type="button" class="src-chip" data-src="' + s + '" onclick="toggleSourceFilter(this)" style="--chip-color:' + color + '"><span class="src-chip-icon">' + iconHtml + '</span><span>' + escapeHtml(sourceSiteTitle(s)) + '</span></button>';
+  }
+  container.innerHTML = html;
+}
+function handleChipFaviconError(img) {
+  const source = img.dataset.source;
+  const span = document.createElement('span');
+  span.className = 'src-fallback';
+  span.style.background = sourceFallbackColor(source);
+  span.textContent = sourceFallbackLetter(source);
+  img.replaceWith(span);
+}
+function toggleSourceFilter(btn) {
+  const src = btn.dataset.src;
+  const container = document.getElementById('srcChips');
+  if (src === '__all__') {
+    activeSources.clear();
+    container.querySelectorAll('.src-chip').forEach(function(b) { b.classList.remove('active'); b.style.backgroundColor = ''; b.style.color = ''; });
+    container.querySelector('.src-chip-all').classList.add('active');
+    render();
+    return;
+  }
+  container.querySelector('.src-chip-all').classList.remove('active');
+  if (activeSources.has(src)) {
+    activeSources.delete(src);
+    btn.classList.remove('active');
+    btn.style.backgroundColor = '';
+    btn.style.color = '';
+    if (activeSources.size === 0) {
+      container.querySelector('.src-chip-all').classList.add('active');
+    }
+  } else {
+    activeSources.add(src);
+    btn.classList.add('active');
+    btn.style.backgroundColor = btn.style.getPropertyValue('--chip-color');
+  }
+  render();
+}
 async function resetDb() {
   if (!confirm('לאפס את כל הנתונים ב-DB? פעולה זו תמחק את כל הרשומות.')) return;
   const btn = document.getElementById('resetBtn');
@@ -640,10 +695,9 @@ function stripCityFromAddress(address, city) {
 }
 function render() {
   const q = document.getElementById('q').value.trim();
-  const src = document.getElementById('src').value;
   const agentFilter = document.getElementById('agentType').value;
   let rows = all.filter(l => {
-    if (src && l.source !== src) return false;
+    if (activeSources.size > 0 && !activeSources.has(l.source)) return false;
     if (agentFilter === 'private' && l.is_agent) return false;
     if (agentFilter === 'agent' && !l.is_agent) return false;
     if (q && !(l.address || '').includes(q) && !(l.neighborhood || '').includes(q) && !(l.city || '').includes(q)) return false;
@@ -714,9 +768,9 @@ function render() {
   });
 }
 document.getElementById('q').addEventListener('input', render);
-document.getElementById('src').addEventListener('change', render);
 document.getElementById('agentType').addEventListener('change', render);
 document.querySelectorAll('th.sort').forEach(th => th.addEventListener('click', () => doSort(th.dataset.key)));
+buildSourceChips();
 load();
 setInterval(load, 30000);
 </script>

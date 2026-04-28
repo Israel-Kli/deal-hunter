@@ -1,19 +1,21 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from deal_hunter.effective import (
     effective_garden_sqm,
     effective_price_per_sqm,
-    effective_rooms,
     effective_units,
 )
 from deal_hunter.models import Listing
 from deal_hunter.scoring.description_signals import (
     combined_search_text,
+    garden_bonus_scoring,
     multi_unit_bonus_and_matches,
-    outdoor_and_rooms_bonus,
 )
+
+log = logging.getLogger(__name__)
 
 MARKET_REFS: list[tuple[str, str, int, int]] = [
     ("תל אביב", "צפון הישן", 50_000, 65_000),
@@ -39,30 +41,17 @@ def market_band(city: str, neighborhood: str) -> tuple[int, int]:
 
 
 def _price_vs_market_delta(ppsqm: float, lo: float, hi: float) -> tuple[float, str]:
-    mid = (lo + hi) / 2
-    if ppsqm <= lo * 0.85:
-        return 3.0, "exceptional (>15% below band)"
-    if ppsqm < lo:
-        span = max(lo * 0.15, 1.0)
-        t = (ppsqm - lo * 0.85) / span
-        return 3.0 - t * 1.0, "below band"
-    if ppsqm < mid:
-        span = max(mid - lo, 1.0)
-        t = (ppsqm - lo) / span
-        return 2.0 - t * 1.0, "below midpoint"
+    if ppsqm <= lo:
+        span = max(lo, 1.0)
+        t = min(ppsqm, lo) / span
+        return round(3.0 - t * 1.0, 2), "below band"
     if ppsqm <= hi:
-        span = max(hi - mid, 1.0)
-        t = (ppsqm - mid) / span
-        return 1.0 - t * 1.0, "in band"
-    if ppsqm <= hi * 1.1:
-        span = max(hi * 0.1, 1.0)
-        t = (ppsqm - hi) / span
-        return 0.0 - t * 1.0, "above band"
-    if ppsqm <= hi * 1.2:
-        span = max(hi * 0.1, 1.0)
-        t = (ppsqm - hi * 1.1) / span
-        return -1.0 - t * 1.0, "much above band"
-    return -2.0, "much above band"
+        span = max(hi - lo, 1.0)
+        t = (ppsqm - lo) / span
+        return round(2.0 - t * 2.0, 2), "in band"
+    s = max(hi * 0.2, 1.0)
+    t = min(ppsqm - hi, hi * 0.2) / s
+    return round(0.0 - t * 2.0, 2), "above band"
 
 
 def score_listing(listing: Listing) -> tuple[float, dict[str, Any]]:
@@ -74,7 +63,6 @@ def score_listing(listing: Listing) -> tuple[float, dict[str, Any]]:
     city = listing.city
     neighborhood = listing.neighborhood
 
-    e_rooms = effective_rooms(listing)
     e_units = effective_units(listing)
     e_garden = effective_garden_sqm(listing)
 
@@ -109,27 +97,14 @@ def score_listing(listing: Listing) -> tuple[float, dict[str, Any]]:
     else:
         reasons["description_unit_hit"] = False
 
-    out_bonus, out_detail = outdoor_and_rooms_bonus(
-        listing, text, e_garden, e_rooms
+    out_bonus, out_detail = garden_bonus_scoring(
+        listing, text, e_garden
     )
     if out_bonus > 0:
         score += out_bonus
         reasons.update(out_detail)
     if e_garden is not None:
         reasons["garden_sqm_used"] = e_garden
-
-    amen = 0.0
-    if listing.parking:
-        amen += 0.5
-    if listing.balcony:
-        amen += 0.3
-    if listing.renovated:
-        amen += 0.6
-    if listing.floor == 0:
-        amen -= 0.5
-    amen = min(2.0, max(-1.0, amen))
-    score += amen
-    reasons["amenity_bonus"] = round(amen, 2)
 
     if listing.is_agent:
         adj = -0.48
@@ -155,4 +130,10 @@ def score_listing(listing: Listing) -> tuple[float, dict[str, Any]]:
 
     final = max(1.0, min(10.0, round(score, 1)))
     reasons["final"] = final
+    log.debug(
+        "score %s/%s (%s, %s): %.1f %s seller=%s",
+        listing.source, listing.source_id, city, neighborhood,
+        final, reasons.get("price_vs_market", "?"),
+        reasons.get("seller_channel", "?"),
+    )
     return final, reasons

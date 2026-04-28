@@ -6,6 +6,7 @@ Kept intentionally small — a dict-shaped surface over sqlite3. No ORM.
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -22,6 +23,8 @@ from deal_hunter.effective import (
 )
 from deal_hunter.models import Listing, ScanResult
 
+log = logging.getLogger(__name__)
+
 _UNSET = object()
 
 SCHEMA_SQL = (Path(__file__).parent / "schema.sql").read_text(encoding="utf-8")
@@ -36,26 +39,37 @@ class ListingsRepo:
         self.conn.executescript(SCHEMA_SQL)
         self._migrate()
         self.conn.commit()
+        log.debug("Opened DB: %s", self.path)
 
     def _migrate(self) -> None:
         cur = self.conn.execute("PRAGMA table_info(listings)")
         columns = {row["name"] for row in cur.fetchall()}
+        added: list[str] = []
         if "sqm_build" not in columns:
             self.conn.execute("ALTER TABLE listings ADD COLUMN sqm_build INTEGER")
+            added.append("sqm_build")
         if "first_listed_date" not in columns:
             self.conn.execute("ALTER TABLE listings ADD COLUMN first_listed_date TEXT DEFAULT ''")
+            added.append("first_listed_date")
         if "is_favorite" not in columns:
             self.conn.execute("ALTER TABLE listings ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0")
+            added.append("is_favorite")
         if "user_notes" not in columns:
             self.conn.execute("ALTER TABLE listings ADD COLUMN user_notes TEXT NOT NULL DEFAULT ''")
+            added.append("user_notes")
         for col in ("units_count", "garden_sqm", "lot_sqm"):
             if col not in columns:
                 self.conn.execute(f"ALTER TABLE listings ADD COLUMN {col} INTEGER")
+                added.append(col)
         if "rooms_user" not in columns:
             self.conn.execute("ALTER TABLE listings ADD COLUMN rooms_user REAL")
+            added.append("rooms_user")
         for col in ("sqm_user", "sqm_build_user", "units_count_user", "garden_sqm_user", "lot_sqm_user"):
             if col not in columns:
                 self.conn.execute(f"ALTER TABLE listings ADD COLUMN {col} INTEGER")
+                added.append(col)
+        if added:
+            log.info("DB migration: added columns %s", added)
 
     def close(self) -> None:
         self.conn.close()
@@ -329,6 +343,10 @@ class ListingsRepo:
         deleted_scan_log = self.conn.execute("DELETE FROM scan_log").rowcount
         self.conn.commit()
         self.conn.execute("VACUUM")
+        log.info(
+            "DB reset: %d listings, %d price_history, %d comps, %d scan_log",
+            deleted_listings, deleted_history, deleted_comps, deleted_scan_log,
+        )
         return {
             "listings": deleted_listings,
             "price_history": deleted_history,
@@ -358,7 +376,8 @@ class ListingsRepo:
                     ),
                 )
                 n += 1
-            except Exception:
+            except Exception as e:
+                log.warning("upsert_comps: skipping row for %s: %s", provider, e)
                 continue
         self.conn.commit()
         return n
@@ -377,6 +396,7 @@ class ListingsRepo:
             ),
         )
         self.conn.commit()
+        log.debug("logged scan: %s %d fetched", result.source, result.fetched)
 
     # ---- dedup ---------------------------------------------------------
 
