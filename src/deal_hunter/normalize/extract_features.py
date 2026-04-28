@@ -1,16 +1,53 @@
 from __future__ import annotations
 
+import logging
 import re
 
 from deal_hunter.models import Listing
 from deal_hunter.normalize.hebrew import strip_niqqud
 
+log = logging.getLogger("deal_hunter.extract_features")
+
 _SQM = r'מ[״"\'׳]?\s*ר'
 
-_UNITS_RE = re.compile(r"(\d{1,2})\s*יחידות?\s*דיור")
+_UNITS_RE = re.compile(
+    r"(?:מחולק[ת]?\s*(?:ל[-\s]*)?"   # optional "מחולק/מחולקת ל/ל-"
+    r")?"                             # close and make the whole prefix optional
+    r"(\d{1,3})"                      # capture the count (1-3 digits for up to 999)
+    r"[\s\u200e\u200f]*"               # whitespace + Unicode direction marks
+    r"(?:יחידות|יחידת)"               # plural or singular construct (יחידת ≠ יחידות)
+    r"[\s\u200e\u200f]*"
+    r"(?:דיור|מניבות?)"              # followed by "דיור" or "מניבה/מניבות"
+)
+# "מחולק[ת] ל-N יחידות" without explicit "דיור"/"מניבות" — prefix is REQUIRED here
+_UNITS_DIVIDED_RE = re.compile(
+    r"מחולק[ת]?\s*(?:ל[-\s]*)?"
+    r"(\d{1,3})"
+    r"[\s\u200e\u200f]*"
+    r"יחידות"
+)
+# Negative: "יחידות הורים" / "יחידות אורחים" etc. (internal suites, not separate housing)
+_UNITS_FALSE_POSITIVE_RE = re.compile(
+    r"יחידות?\s*(?:הורים?|אורחים?|מתבגרים?|יחידת\s*הורים?|שינה|רחצה|מיזוג|מזגנים?)"
+)
 _GARDEN_RE = re.compile(
     r"(?:גינ[הת]|חצר)[^.\n]{0,40}?(\d{2,4})\s*" + _SQM
 )
+
+
+def _extract_units_count(text: str) -> int | None:
+    for pat in (_UNITS_RE, _UNITS_DIVIDED_RE):
+        m = pat.search(text)
+        if m:
+            val = int(m.group(1))
+            if val <= 0:
+                continue
+            # Check for false positives like "יחידות הורים"
+            fp = _UNITS_FALSE_POSITIVE_RE.search(text)
+            if fp and fp.start() <= m.start() + len(m.group(0)) and fp.start() >= m.start() - 10:
+                continue
+            return val
+    return None
 
 
 def extract_features(listing: Listing) -> None:
@@ -21,11 +58,13 @@ def extract_features(listing: Listing) -> None:
     text = strip_niqqud(raw).casefold()
 
     if listing.units_count is None:
-        m = _UNITS_RE.search(text)
-        if m:
-            val = int(m.group(1))
-            if val > 0:
-                listing.units_count = val
+        val = _extract_units_count(text)
+        if val is not None:
+            listing.units_count = val
+            log.info(
+                "%s %s: extracted units_count=%d from description",
+                listing.source, listing.source_id, val,
+            )
 
     if listing.garden_sqm is None:
         m = _GARDEN_RE.search(text)
