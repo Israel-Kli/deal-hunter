@@ -31,8 +31,17 @@ def test_score_with_units_override():
     assert reasons["description_unit_adjustment"] >= 0.9
 
 
-def test_score_falls_back_to_description_when_units_null():
+def test_score_extracts_count_from_description_when_units_null():
     l = _listing(description="3 יחידות דיור")
+    sc, reasons = score_listing(l)
+    assert reasons["description_unit_hit"] is True
+    assert reasons["description_unit_source"] == "description_count"
+    # 3 units → bonus = min(1.5, 0.5 * (3-1)) = 1.0
+    assert reasons["description_unit_adjustment"] == 1.0
+
+
+def test_score_falls_back_to_keyword_when_no_count_in_text():
+    l = _listing(description="דירה עם אופציה ליחידת דיור")
     sc, reasons = score_listing(l)
     assert reasons["description_unit_hit"] is True
     assert reasons["description_unit_source"] == "description"
@@ -52,6 +61,6 @@ def test_score_no_structured_falls_back_to_phrase():
 
 
 def test_score_uses_effective_price_per_sqm():
-    l = _listing(price=2_000_000, sqm=100, sqm_user=80)
+    l = _listing(price=2_000_000, sqm_build=100, sqm_build_user=80)
     sc, reasons = score_listing(l)
     assert reasons.get("price_per_sqm_used") == 25000

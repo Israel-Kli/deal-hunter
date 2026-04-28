@@ -8,6 +8,22 @@ from deal_hunter.normalize.hebrew import strip_niqqud
 
 _HEB_CHAR = re.compile(r"[\u0590-\u05FF]")
 
+_UNITS_COUNT_FROM_TEXT = re.compile(
+    r"(?:מחולק[ת]?\s*(?:ל[-\s]*)?"
+    r")?"
+    r"(\d{1,3})"
+    r"[\s\u200e\u200f]*"
+    r"(?:יחידות|יחידת)"
+    r"[\s\u200e\u200f]*"
+    r"(?:דיור|מניבות?)"
+)
+_UNITS_DIVIDED_FROM_TEXT = re.compile(
+    r"מחולק[ת]?\s*(?:ל[-\s]*)?"
+    r"(\d{1,3})"
+    r"[\s\u200e\u200f]*"
+    r"יחידות"
+)
+
 
 def _standalone_word(text: str, word: str) -> bool:
     for m in re.finditer(re.escape(word), text):
@@ -16,6 +32,16 @@ def _standalone_word(text: str, word: str) -> bool:
         if not _HEB_CHAR.match(before) and not _HEB_CHAR.match(after):
             return True
     return False
+
+
+def _try_extract_units_count(text: str) -> int | None:
+    for pat in (_UNITS_COUNT_FROM_TEXT, _UNITS_DIVIDED_FROM_TEXT):
+        m = pat.search(text)
+        if m:
+            val = int(m.group(1))
+            if val > 0:
+                return val
+    return None
 
 
 def combined_search_text(listing: Listing) -> str:
@@ -53,6 +79,15 @@ def multi_unit_bonus_and_matches(
         return bonus, matched, source
 
     t = text
+
+    # Try to extract count from text when effective_units is None
+    units_from_text = _try_extract_units_count(t)
+    if units_from_text is not None and units_from_text >= 2:
+        bonus = min(1.5, 0.5 * (units_from_text - 1))
+        matched.append(f"{units_from_text} יחידות (מהטקסט)")
+        source = "description_count"
+        return bonus, matched, source
+
     if "יחידות דיור" in t:
         matched.append("יחידות דיור")
         bonus += 0.38
