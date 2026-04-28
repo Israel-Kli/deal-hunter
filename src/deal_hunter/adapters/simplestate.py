@@ -93,14 +93,15 @@ class SimplestateAdapter:
                 built_i = int(built)
                 if listing.sqm is None or built_i > listing.sqm:
                     if listing.sqm is not None and built_i > listing.sqm:
-                        log.debug(
+                        log.info(
                             "detail: overriding sqm %d → %d for %s",
                             listing.sqm, built_i, source_id,
                         )
                     listing.sqm = built_i
                     listing.price_per_sqm = round(listing.price / built_i)
             elif listing.sqm is None:
-                log.debug("detail: size not found in API for %s, sqm still None", source_id)
+                log.info("detail: API size field missing/null for %s (prop keys: %s)",
+                         source_id, sorted(prop.keys()) if isinstance(prop, dict) else "N/A")
 
             field_size = prop.get("field_size")
             if isinstance(field_size, (int, float)) and field_size > 0 and listing.lot_sqm is None:
