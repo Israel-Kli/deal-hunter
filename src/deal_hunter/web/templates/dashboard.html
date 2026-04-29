@@ -68,11 +68,14 @@
   .edit-input { width:100%; box-sizing:border-box; padding:1px 3px; font-size:11px; text-align:center; border:1px solid #3b82f6; border-radius:3px; outline:none; font-family:inherit; }
   .scoring-info { background:#fff; border-radius:8px; padding:12px 16px; margin-bottom:16px; font-size:12px; color:#4b5563; box-shadow:0 1px 3px rgba(0,0,0,.08); line-height:1.6; }
   .scoring-info b { color:#1a1a2e; }
-  .btn { border:none; border-radius:6px; padding:6px 14px; font-size:14px; cursor:pointer; }
-  .btn-refresh { background:#64748b; color:#fff; }
-  .btn-refresh:hover { background:#475569; }
-  .btn-scan { background:#3b82f6; color:#fff; }
-  .btn-reset { background:#ef4444; color:#fff; }
+   .btn { border:none; border-radius:6px; padding:6px 14px; font-size:14px; cursor:pointer; transition:all .15s; }
+   .btn:disabled { opacity:.5; cursor:not-allowed; }
+   .btn-refresh { background:#64748b; color:#fff; }
+   .btn-refresh:hover:not(:disabled) { background:#475569; }
+   .btn-refresh:disabled { background:#94a3b8; }
+   .btn-reset-scan { background:linear-gradient(135deg,#2563eb,#7c3aed); color:#fff; font-weight:600; display:inline-flex; align-items:center; gap:5px; }
+   .btn-reset-scan:hover:not(:disabled) { background:linear-gradient(135deg,#1d4ed8,#6d28d9); transform:translateY(-1px); box-shadow:0 2px 8px rgba(37,99,235,.3); }
+   .btn-reset-scan:disabled { background:#a78bfa; cursor:not-allowed; }
   .agent-badge { display:inline-block; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:600; }
   .agent-badge.makler { background:#f59e0b; color:#fff; }
   .agent-badge.private { background:#22c55e; color:#fff; }
@@ -119,14 +122,8 @@
   <div class="bar">
     <input id="q" placeholder="חיפוש טקסט..." />
     <div class="src-chips" id="srcChips"></div>
-    <select id="agentType">
-      <option value="">הכל</option>
-      <option value="private">פרטי בלבד</option>
-      <option value="agent">מתווך בלבד</option>
-    </select>
-    <button type="button" class="btn btn-refresh" onclick="load()">רענן</button>
-    <button type="button" id="scanBtn" class="btn btn-scan" onclick="triggerScan()">🔍 סריקה ידנית</button>
-    <button type="button" id="resetBtn" class="btn btn-reset" onclick="resetDb()">🔄 איפוס DB</button>
+    <button type="button" id="refreshBtn" class="btn btn-refresh" onclick="refresh()">רענן</button>
+    <button type="button" id="resetScanBtn" class="btn btn-reset-scan" onclick="resetAndScan()">🔄 איפוס וסריקה</button>
     <span id="sourceActionHint" class="muted" style="font-size:11px;"></span>
   </div>
   <div class="scoring-info">
@@ -647,28 +644,36 @@ function getSelectedSource() {
 }
 function updateActionButtons() {
   const src = getSelectedSource();
-  const resetBtn = document.getElementById('resetBtn');
-  const scanBtn = document.getElementById('scanBtn');
+  const btn = document.getElementById('resetScanBtn');
   const hint = document.getElementById('sourceActionHint');
   if (src) {
     const label = sourceSiteTitle(src);
-    resetBtn.textContent = '🔄 איפוס ' + label;
-    scanBtn.textContent = '🔍 סריקת ' + label;
+    btn.textContent = '🔄 איפוס וסריקת ' + label;
     hint.textContent = 'פועל על: ' + label;
   } else {
-    resetBtn.textContent = '🔄 איפוס DB';
-    scanBtn.textContent = '🔍 סריקה ידנית';
+    btn.textContent = '🔄 איפוס וסריקה';
     hint.textContent = activeSources.size > 1 ? 'פועל על: נבחרו ' + activeSources.size + ' מקורות' : '';
   }
 }
-async function resetDb() {
+async function refresh() {
+  const btn = document.getElementById('refreshBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ טוען...';
+  try {
+    await load();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'רענן';
+  }
+}
+async function resetAndScan() {
   const src = getSelectedSource();
   const label = src ? sourceSiteTitle(src) : null;
   const msg = src
-    ? 'לאפס את כל הנתונים של ' + label + '? פעולה זו תמחק את כל הרשומות מהמקור הזה.'
-    : 'לאפס את כל הנתונים ב-DB? פעולה זו תמחק את כל הרשומות.';
+    ? 'לאפס ולסרוק מחדש את ' + label + '? פעולה זו תמחק את כל הרשומות מהמקור הזה ואז תפעיל סריקה.'
+    : 'לאפס ולסרוק מחדש את כל הנתונים? פעולה זו תמחק את כל הרשומות ואז תפעיל סריקה.';
   if (!confirm(msg)) return;
-  const btn = document.getElementById('resetBtn');
+  const btn = document.getElementById('resetScanBtn');
   btn.disabled = true;
   btn.textContent = '⏳ מאפס...';
   try {
@@ -678,41 +683,29 @@ async function resetDb() {
       : {method: 'POST'};
     const r = await fetch(url, opts);
     const d = await r.json();
-    if (d.status === 'ok') {
-      const count = d.deleted.listings || 0;
-      alert((label || 'ה-DB') + ' אופס בהצלחה. נמחקו ' + count + ' מודעות. הפעל סריקה מחדש.');
-      load();
+    if (d.status !== 'ok') {
+      alert('שגיאה באיפוס: ' + (d.error || 'לא ידוע'));
+      btn.disabled = false;
+      btn.textContent = src ? '🔄 איפוס וסריקת ' + sourceSiteTitle(src) : '🔄 איפוס וסריקה';
+      return;
     }
-  } catch(e) {
-    alert('שגיאה באיפוס: ' + e.message);
-  } finally {
-    btn.disabled = false;
-    updateActionButtons();
-  }
-}
-async function triggerScan() {
-  const src = getSelectedSource();
-  const label = src ? sourceSiteTitle(src) : null;
-  const btn = document.getElementById('scanBtn');
-  btn.disabled = true;
-  btn.textContent = '⏳ סורק...';
-  try {
-    const opts = src
+    btn.textContent = '⏳ סורק...';
+    const scanOpts = src
       ? {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source: src})}
       : {method: 'POST'};
-    const r = await fetch('/api/scan', opts);
-    const d = await r.json();
-    if (d.status === 'ok') {
-      alert('סריקה הושלמה: ' + d.summary);
-      load();
+    const sr = await fetch('/api/scan', scanOpts);
+    const sd = await sr.json();
+    if (sd.status === 'ok') {
+      alert('אופס ונסרק בהצלחה. ' + sd.summary);
     } else {
-      alert('שגיאה בסריקה: ' + (d.error || 'לא ידוע'));
+      alert('איפוס הצליח אך סריקה נכשלה: ' + (sd.error || 'לא ידוע'));
     }
   } catch(e) {
-    alert('שגיאה בסריקה: ' + e.message);
+    alert('שגיאה: ' + e.message);
   } finally {
     btn.disabled = false;
     updateActionButtons();
+    load();
   }
 }
 function doSort(key) {
@@ -744,11 +737,8 @@ function stripCityFromAddress(address, city) {
 }
 function render() {
   const q = document.getElementById('q').value.trim();
-  const agentFilter = document.getElementById('agentType').value;
   let rows = all.filter(l => {
     if (activeSources.size > 0 && !activeSources.has(l.source)) return false;
-    if (agentFilter === 'private' && l.is_agent) return false;
-    if (agentFilter === 'agent' && !l.is_agent) return false;
     if (q && !(l.address || '').includes(q) && !(l.neighborhood || '').includes(q) && !(l.city || '').includes(q)) return false;
     return true;
   });
@@ -790,9 +780,13 @@ function render() {
     const isFav = !!l.is_favorite;
     const favStar = isFav ? '★' : '☆';
     const favCls = 'fav-btn' + (isFav ? ' fav-on' : '');
-    const dateAge = l.first_listed_date ? Math.floor((Date.now() - new Date(l.first_listed_date + 'T00:00:00Z')) / 86400000) : null;
-    const dateDisplay = dateAge != null ? dateAge + 'd' : '—';
-    const dateTitle = l.first_listed_date || '';
+    const dateAge = l.first_listed_date
+      ? Math.floor((Date.now() - new Date(l.first_listed_date + 'T00:00:00Z')) / 86400000)
+      : l.first_seen_at
+        ? Math.floor((Date.now() - new Date(l.first_seen_at)) / 86400000)
+        : null;
+    const dateDisplay = dateAge != null ? dateAge + 'd' + (l.first_listed_date ? '' : ' *') : '—';
+    const dateTitle = l.first_listed_date || l.first_seen_at || '';
     const ppsqmEff = l.price_per_sqm_eff != null ? '₪' + l.price_per_sqm_eff.toLocaleString() : '—';
     return '<tr>' +
       '<td class="col-fav"><button type="button" class="' + favCls + '" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '" aria-pressed="' + (isFav ? 'true' : 'false') + '" title="מועדף">' + favStar + '</button></td>' +
@@ -821,7 +815,6 @@ function render() {
   });
 }
 document.getElementById('q').addEventListener('input', render);
-document.getElementById('agentType').addEventListener('change', render);
 document.querySelectorAll('th.sort').forEach(th => th.addEventListener('click', () => doSort(th.dataset.key)));
 buildSourceChips();
 updateActionButtons();
