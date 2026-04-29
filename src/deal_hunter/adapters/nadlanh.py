@@ -12,11 +12,9 @@ urllib with a plain browser User-Agent which passes through.
 from __future__ import annotations
 
 import gzip
-import json
 import logging
 import re
 import time
-from io import BytesIO
 from typing import Any, Iterable
 from urllib.parse import urlencode, urljoin
 from urllib.request import Request, urlopen
@@ -25,6 +23,7 @@ from bs4 import BeautifulSoup, Tag
 
 from deal_hunter.adapters.base import SearchFilters
 from deal_hunter.models import Listing
+from deal_hunter.normalize.year_built import extract_year_built
 
 log = logging.getLogger(__name__)
 
@@ -51,7 +50,7 @@ def _fetch_urllib(url: str, timeout: int = 30, retries: int = 3) -> str | None:
                 status = resp.getcode()
                 if status == 403:
                     log.warning("nadlanh fetch 403 (attempt %d/%d): %s", attempt, retries, url)
-                    last_err = Exception(f"HTTP 403")
+                    last_err = Exception("HTTP 403")
                     if attempt < retries:
                         time.sleep(2 * attempt)
                     continue
@@ -141,7 +140,7 @@ class NadlanhAdapter:
             listing.elevator = listing.elevator or "מעלית" in ft
             listing.balcony = listing.balcony or "מרפסת" in ft
             listing.mamad = listing.mamad or "ממד" in ft or "ממ״ד" in ft or "ממ\"ד" in ft
-            listing.renovated = listing.renovated or "משופץ" in ft or "שיפוץ" in ft
+            listing.renovated = listing.renovated or "משופץ" in ft or "משופצת" in ft or "שיפוץ" in ft
             for t in amenity_texts:
                 if t and t not in listing.tags:
                     listing.tags.append(t)
@@ -164,6 +163,8 @@ class NadlanhAdapter:
         if listing.description:
             listing.lot_sqm = listing.lot_sqm or _extract_lot_sqm(listing.description)
             listing.garden_sqm = listing.garden_sqm or _extract_garden_sqm(listing.description)
+            if listing.year_built is None:
+                listing.year_built = extract_year_built(listing.description)
 
         time.sleep(self.request_delay)
         return listing

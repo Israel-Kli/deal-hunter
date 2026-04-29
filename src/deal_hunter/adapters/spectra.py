@@ -20,6 +20,7 @@ from bs4 import BeautifulSoup, Tag
 from deal_hunter.adapters.base import SearchFilters
 from deal_hunter.http_client import fetch
 from deal_hunter.models import Listing
+from deal_hunter.normalize.year_built import extract_year_built
 
 log = logging.getLogger(__name__)
 
@@ -133,6 +134,22 @@ class SpectraAdapter:
                     if units_val is not None and units_val > 0:
                         listing.units_count = units_val
 
+        # ── Year built from detail wrap or description ──
+        if listing.year_built is None:
+            if detail_wrap:
+                for strong in detail_wrap.select("li strong"):
+                    label = strong.get_text(strip=True)
+                    if "שנת" in label and ("בני" in label or "בני" in label):
+                        value_el = strong.find_next_sibling("span")
+                        if value_el is not None:
+                            val = value_el.get_text(strip=True)
+                            yb = _first_int(val)
+                            if yb and 1900 <= yb <= 2100:
+                                listing.year_built = yb
+                                break
+            if listing.year_built is None:
+                listing.year_built = extract_year_built(listing.description)
+
         # ── Amenities from features wrap ──
         features = soup.select_one("#property-features-wrap")
         if features:
@@ -143,7 +160,7 @@ class SpectraAdapter:
             listing.elevator = listing.elevator or "מעלית" in ft
             listing.balcony = listing.balcony or "מרפסת" in ft
             listing.mamad = listing.mamad or "ממד" in ft or "ממ״ד" in ft or "ממ\"ד" in ft
-            listing.renovated = listing.renovated or "משופץ" in ft or "שיפוץ" in ft
+            listing.renovated = listing.renovated or "משופץ" in ft or "משופצת" in ft or "שיפוץ" in ft
             for a in feature_links:
                 txt = a.get_text(strip=True)
                 if txt and txt not in listing.tags:

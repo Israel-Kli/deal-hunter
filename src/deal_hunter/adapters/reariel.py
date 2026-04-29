@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import re
-import time
 from typing import Any, Iterable
 from urllib.parse import urljoin
 
@@ -19,6 +18,7 @@ from deal_hunter.adapters.base import SearchFilters
 from deal_hunter.http_client import fetch
 from deal_hunter.models import Listing
 from deal_hunter.normalize.israeli_cities import hebrew_allowed_city_keys, hebrew_city_match_key
+from deal_hunter.normalize.year_built import extract_year_built
 
 log = logging.getLogger(__name__)
 
@@ -113,7 +113,7 @@ class RearielAdapter:
         listing.balcony = listing.balcony or "מרפסת" in tl
         listing.ac = listing.ac or "מיזוג" in tl or "מזגן" in tl
         listing.mamad = listing.mamad or "ממ" in tl and "ד" in tl
-        listing.renovated = listing.renovated or "משופץ" in tl or "שיפוץ" in tl
+        listing.renovated = listing.renovated or "משופץ" in tl or "משופצת" in tl or "שיפוץ" in tl
 
         # Floor from detail (if available)
         floor_el = soup.select_one(".floor-str") or soup.select_one(".floor-number")
@@ -238,12 +238,24 @@ class RearielAdapter:
             log.debug("Reariel filtered: reason=city_not_allowed source_id=%s city=%s", source_id, city)
             return None, "city_not_allowed"
 
-        # Amenities from tags
+        # Amenities from tags + description
         tl = " ".join(tags)
         parking = "חנייה" in tl or "חניה" in tl
+        elevator = "מעלית" in tl
         balcony = "מרפסת" in tl
-        mamad = "ממ" in tl and "ד" in tl
-        renovated = "משופץ" in tl
+        ac = "מיזוג" in tl or "מזגן" in tl
+        mamad = "ממד" in tl or 'ממ"ד' in tl or "ממ״ד" in tl
+        renovated = "משופץ" in tl or "משופצת" in tl or "שיפוץ" in tl
+
+        # Extract floor from description text (e.g. "קומה 2", "floor 3")
+        floor: int | None = None
+        floor_m = re.search(r"קומה\s+(-?\d+)", description)
+        if floor_m:
+            floor = int(floor_m.group(1))
+        if floor is None:
+            floor_m = re.search(r"floor\s+(-?\d+)", description)
+            if floor_m:
+                floor = int(floor_m.group(1))
 
         log.debug("Reariel parsed: source_id=%s price=%d rooms=%s sqm=%s city=%s type=%s", source_id, price, rooms_f, sqm_i, city, asset_type)
 
@@ -259,12 +271,15 @@ class RearielAdapter:
             rooms=rooms_f,
             sqm=sqm_i,
             sqm_build=sqm_i,
+            floor=floor,
             price=price,
             price_per_sqm=round(price / sqm_i) if sqm_i else None,
             listing_type=asset_type,
             is_agent=True,
             parking=parking,
+            elevator=elevator,
             balcony=balcony,
+            ac=ac,
             mamad=mamad,
             renovated=renovated,
             description=description,
@@ -272,6 +287,7 @@ class RearielAdapter:
             tags=tags,
             lot_sqm=lot_sqm,
             garden_sqm=garden_sqm,
+            year_built=extract_year_built(description),
             source_payload={"_asset_type": asset_type},
         ), None
 

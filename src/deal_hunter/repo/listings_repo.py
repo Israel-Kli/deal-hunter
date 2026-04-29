@@ -69,6 +69,9 @@ class ListingsRepo:
             if col not in columns:
                 self.conn.execute(f"ALTER TABLE listings ADD COLUMN {col} INTEGER")
                 added.append(col)
+        if "year_built" not in columns:
+            self.conn.execute("ALTER TABLE listings ADD COLUMN year_built INTEGER")
+            added.append("year_built")
         if added:
             log.info("DB migration: added columns %s", added)
 
@@ -139,7 +142,8 @@ class ListingsRepo:
                 is_favorite, user_notes,
                 units_count, garden_sqm, lot_sqm,
                 rooms_user,
-                sqm_user, sqm_build_user, units_count_user, garden_sqm_user, lot_sqm_user
+                sqm_user, sqm_build_user, units_count_user, garden_sqm_user, lot_sqm_user,
+                year_built
             ) VALUES (
                 ?,?,?, ?,?,?,?,?,
                 ?,?,?,?,
@@ -154,7 +158,8 @@ class ListingsRepo:
                 ?,?,?,
                 ?,?,?,
                 ?,
-                ?,?,?,?
+                ?,?,?,?,
+                ?
             )
             ON CONFLICT(source, source_id) DO UPDATE SET
                 url=excluded.url,
@@ -195,7 +200,8 @@ class ListingsRepo:
                 source_payload=excluded.source_payload,
                 units_count=excluded.units_count,
                 garden_sqm=excluded.garden_sqm,
-                lot_sqm=excluded.lot_sqm
+                lot_sqm=excluded.lot_sqm,
+                year_built=excluded.year_built
             """,
             (
                 listing.source, listing.source_id, listing.url,
@@ -224,6 +230,7 @@ class ListingsRepo:
                 listing.sqm_user, listing.sqm_build_user,
                 listing.units_count_user, listing.garden_sqm_user,
                 listing.lot_sqm_user,
+                listing.year_built,
             ),
         )
         self.conn.execute(
@@ -315,6 +322,12 @@ class ListingsRepo:
             d["garden_sqm_eff"] = effective_garden_sqm(d)
             d["lot_sqm_eff"] = effective_lot_sqm(d)
             d["price_per_sqm_eff"] = effective_price_per_sqm(d)
+            yb = d.get("year_built")
+            if yb and isinstance(yb, (int, float)):
+                from datetime import datetime
+                d["building_age"] = datetime.utcnow().year - int(yb)
+            else:
+                d["building_age"] = None
             out.append(d)
         return out
 
