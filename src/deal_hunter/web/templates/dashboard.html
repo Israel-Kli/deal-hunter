@@ -28,9 +28,12 @@
   .fav-btn { background:none; border:none; cursor:pointer; font-size:17px; line-height:1; padding:2px; color:#cbd5e1; }
   .fav-btn:hover { color:#94a3b8; }
   .fav-btn.fav-on { color:#ca8a04; }
-  th.col-del, td.col-del { width:2.25rem; max-width:2.35rem; padding:4px 2px; text-align:center; vertical-align:middle; }
+  th.col-del, td.col-del { width:3.75rem; max-width:3.85rem; padding:4px 2px; text-align:center; vertical-align:middle; }
   .del-btn { background:none; border:none; cursor:pointer; font-size:13px; line-height:1; padding:2px; color:#cbd5e1; border-radius:3px; }
   .del-btn:hover { color:#ef4444; background:#fef2f2; }
+  .rescan-btn { background:none; border:none; cursor:pointer; font-size:13px; line-height:1; padding:2px; color:#cbd5e1; border-radius:3px; }
+  .rescan-btn:hover { color:#3b82f6; background:#eff6ff; }
+  .rescan-btn:disabled { opacity:.5; cursor:wait; }
   th.col-score, td.col-score { width:2.75rem; max-width:2.85rem; padding:4px 3px; text-align:center; }
   th.col-city, td.col-city { width:4.5rem; max-width:5.5rem; padding:4px 4px; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:middle; }
   th.col-addr, td.col-addr { width:5%; min-width:44px; max-width:75px; }
@@ -383,6 +386,54 @@ async function deleteListing(btn) {
     btn.disabled = false;
   }
 }
+async function rescanListing(btn) {
+  const source = btn.dataset.source;
+  const sourceId = btn.dataset.sourceId;
+  if (!confirm('לסרוק מחדש את המודעה הזו מהמקור?')) return;
+  btn.disabled = true;
+  btn.textContent = '⏳';
+  try {
+    const resp = await fetch('/api/listing/rescan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: source, source_id: sourceId }),
+    });
+    const d = await resp.json();
+    if (!resp.ok) throw new Error(d.error || resp.statusText);
+    patchListingInAll(source, sourceId, {
+      score: d.score,
+      score_reasons: d.score_reasons,
+      rooms_eff: d.listing.rooms_eff,
+      sqm_eff: d.listing.sqm_eff,
+      sqm_build_eff: d.listing.sqm_build_eff,
+      units_count_eff: d.listing.units_count_eff,
+      lot_sqm_eff: d.listing.lot_sqm_eff,
+      garden_sqm_eff: d.listing.garden_sqm_eff,
+      price_per_sqm_eff: d.listing.price_per_sqm_eff,
+      price: d.listing.price,
+      price_before: d.listing.price_before,
+      description: d.listing.description,
+      parking: d.listing.parking,
+      elevator: d.listing.elevator,
+      balcony: d.listing.balcony,
+      renovated: d.listing.renovated,
+      floor: d.listing.floor,
+      rooms: d.listing.rooms,
+      sqm: d.listing.sqm,
+      sqm_build: d.listing.sqm_build,
+      units_count: d.listing.units_count,
+      garden_sqm: d.listing.garden_sqm,
+      lot_sqm: d.listing.lot_sqm,
+      year_built: d.listing.year_built,
+      building_age: d.listing.building_age,
+    });
+    render();
+  } catch (err) {
+    alert('סריקה מחדש נכשלה: ' + (err && err.message ? err.message : err));
+    btn.disabled = false;
+    btn.textContent = '↻';
+  }
+}
 function flushNoteSave(ta, exitEdit) {
   const k = listingKey(ta.dataset.source, ta.dataset.sourceId);
   if (noteSaveTimers[k]) {
@@ -501,6 +552,12 @@ document.getElementById('rows').addEventListener('click', function(e) {
   if (favBtn) {
     e.preventDefault();
     toggleFavorite(favBtn);
+    return;
+  }
+  const rescanBtn = e.target.closest('.rescan-btn');
+  if (rescanBtn) {
+    e.preventDefault();
+    rescanListing(rescanBtn);
     return;
   }
   const delBtn = e.target.closest('.del-btn');
@@ -805,7 +862,7 @@ function render() {
       '<td class="col-num">' + editCellHtml(l, 'garden_sqm', 'garden_sqm_eff', 'garden_sqm') + '</td>' +
       '<td class="col-price">₪' + (l.price || 0).toLocaleString() + '</td>' +
       '<td class="col-ppsqm">' + ppsqmEff + '</td>' +
-      '<td class="col-del"><button type="button" class="del-btn" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '" title="מחיקה לצמיתות">✕</button></td>' +
+      '<td class="col-del"><button type="button" class="rescan-btn" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '" title="סריקה מחדש">↻</button><button type="button" class="del-btn" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '" title="מחיקה לצמיתות">✕</button></td>' +
       '</tr>';
   }).join('');
   document.getElementById('rows').innerHTML = html || '<tr><td colspan="17" class="muted">אין תוצאות</td></tr>';

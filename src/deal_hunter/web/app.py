@@ -8,6 +8,15 @@ import json
 import logging
 from pathlib import Path
 
+from deal_hunter.adapters.ad import AdAdapter
+from deal_hunter.adapters.base import ScraperAdapter
+from deal_hunter.adapters.komo import KomoAdapter
+from deal_hunter.adapters.nadlanh import NadlanhAdapter
+from deal_hunter.adapters.onmap import OnMapAdapter
+from deal_hunter.adapters.reariel import RearielAdapter
+from deal_hunter.adapters.simplestate import SimplestateAdapter
+from deal_hunter.adapters.spectra import SpectraAdapter
+from deal_hunter.adapters.yad2 import Yad2Adapter
 from deal_hunter.config import Config
 from deal_hunter.dedup.canonicalizer import load_existing_groups
 from deal_hunter.effective import (
@@ -20,6 +29,7 @@ from deal_hunter.effective import (
     effective_units,
 )
 from deal_hunter.models import Listing
+from deal_hunter.normalize.extract_features import extract_features
 from deal_hunter.repo.listings_repo import ListingsRepo
 from deal_hunter.scoring.heuristic import score_listing
 
@@ -31,6 +41,71 @@ def _make_handler(cfg: Config):
     db_path = Path(cfg.data_dir) / "deal-hunter.db"
     _scan_lock = threading.Lock()
     _scan_in_progress = [False]
+
+    def _adapter_for_source(source: str) -> ScraperAdapter | None:
+        if source == "yad2":
+            return Yad2Adapter(
+                cities=[c.model_dump() for c in cfg.cities],
+                search=cfg.search.model_dump(),
+                max_pages=cfg.schedule.max_pages,
+                request_delay_sec=cfg.schedule.delay_between_requests_sec,
+            )
+        if source == "onmap":
+            slugs = cfg.onmap_cities or [c.onmap_slug for c in cfg.cities if c.onmap_slug]
+            allowed_cities = [c.hebrew_name for c in cfg.cities if c.hebrew_name]
+            return OnMapAdapter(
+                city_slugs=slugs,
+                search=cfg.search.model_dump(),
+                allowed_cities=allowed_cities,
+                max_pages=cfg.schedule.max_pages,
+                request_delay_sec=cfg.schedule.delay_between_requests_sec,
+            )
+        if source == "ad":
+            paths = cfg.ad_city_paths or [f"/city/{c.slug}" for c in cfg.cities if c.slug]
+            allowed_cities = [c.hebrew_name for c in cfg.cities if c.hebrew_name]
+            return AdAdapter(
+                city_paths=paths,
+                search=cfg.search.model_dump(),
+                allowed_cities=allowed_cities,
+                max_pages=cfg.schedule.max_pages,
+                request_delay_sec=cfg.schedule.delay_between_requests_sec,
+                enrich_details=True,
+            )
+        if source == "reariel":
+            allowed_cities = [c.hebrew_name for c in cfg.cities if c.hebrew_name]
+            return RearielAdapter(
+                search=cfg.search.model_dump(),
+                allowed_cities=allowed_cities,
+                request_delay_sec=cfg.schedule.delay_between_requests_sec,
+            )
+        if source == "spectra":
+            return SpectraAdapter(
+                search=cfg.search.model_dump(),
+                request_delay_sec=cfg.schedule.delay_between_requests_sec,
+            )
+        if source == "nadlanh":
+            return NadlanhAdapter(
+                search=cfg.search.model_dump(),
+                max_pages=cfg.schedule.max_pages,
+                request_delay_sec=cfg.schedule.delay_between_requests_sec,
+            )
+        if source == "simplestate":
+            return SimplestateAdapter(
+                business_ids=[877],
+                search=cfg.search.model_dump(),
+                page_size=100,
+                request_delay_sec=cfg.schedule.delay_between_requests_sec,
+            )
+        if source == "komo":
+            komo_cities = [c.hebrew_name for c in cfg.cities if c.hebrew_name]
+            allowed_cities = [c.hebrew_name for c in cfg.cities if c.hebrew_name]
+            return KomoAdapter(
+                cities=komo_cities,
+                search=cfg.search.model_dump(),
+                allowed_cities=allowed_cities,
+                request_delay_sec=cfg.schedule.delay_between_requests_sec,
+            )
+        return None
 
     class H(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *a, **kw):
@@ -288,6 +363,100 @@ def _make_handler(cfg: Config):
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
+                return
+            if self.path == "/api/listing/rescan":
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                except ValueError:
+                    length = 0
+                raw = self.rfile.read(length) if length > 0 else b"{}"
+                try:
+                    data = json.loads(raw.decode("utf-8"))
+                except json.JSONDecodeError:
+                    self._write_json(400, {"status": "error", "error": "Invalid JSON"})
+                    return
+                source = data.get("source")
+                source_id = data.get("source_id")
+                if not source or not source_id:
+                    self._write_json(400, {"status": "error", "error": "source and source_id required"})
+                    return
+                with ListingsRepo(db_path) as repo:
+                    row = repo.get_dict(str(source), str(source_id))
+                    if not row:
+                        self._write_json(404, {"status": "error", "error": "Listing not found"})
+                        return
+                adapter = _adapter_for_source(str(source))
+                if adapter is None:
+                    self._write_json(400, {"status": "error", "error": f"Unknown or disabled source: {source}"})
+                    return
+                listing = Listing(
+                    source=row["source"],
+                    source_id=row["source_id"],
+                    url=str(row.get("url") or ""),
+                    city=str(row.get("city") or ""),
+                    neighborhood=str(row.get("neighborhood") or ""),
+                    street=str(row.get("street") or ""),
+                    house_number=str(row.get("house_number") or ""),
+                    address=str(row.get("address") or ""),
+                    rooms=row.get("rooms"),
+                    sqm=row.get("sqm"),
+                    sqm_build=row.get("sqm_build"),
+                    floor=row.get("floor"),
+                    price=row["price"],
+                    price_before=row.get("price_before"),
+                    listing_type=str(row.get("listing_type") or ""),
+                    is_agent=bool(row.get("is_agent")),
+                    parking=bool(row.get("parking")),
+                    elevator=bool(row.get("elevator")),
+                    balcony=bool(row.get("balcony")),
+                    ac=bool(row.get("ac")),
+                    mamad=bool(row.get("mamad")),
+                    renovated=bool(row.get("renovated")),
+                    description=str(row.get("description") or ""),
+                    tags=json.loads(row.get("tags_json") or "[]"),
+                    lat=row.get("lat"),
+                    lon=row.get("lon"),
+                    publish_date=str(row.get("publish_date") or ""),
+                    first_listed_date=str(row.get("first_listed_date") or ""),
+                    images=json.loads(row.get("images_json") or "[]"),
+                    source_payload=json.loads(row.get("source_payload") or "{}"),
+                )
+                try:
+                    adapter.fetch_detail(listing)
+                    extract_features(listing)
+                except Exception as e:
+                    log.exception("Rescrape failed for %s %s", source, source_id)
+                    self._write_json(500, {"status": "error", "error": f"Rescrape failed: {e}"})
+                    return
+                score, reasons = score_listing(listing)
+                listing.score = score
+                listing.score_reasons = reasons
+                with ListingsRepo(db_path) as repo:
+                    repo.upsert(listing)
+                    updated = repo.get_dict(str(source), str(source_id))
+                ub = dict(updated or {})
+                for bf in ("parking", "elevator", "balcony", "ac", "mamad", "renovated", "is_agent", "is_favorite"):
+                    ub[bf] = bool(ub.get(bf))
+                ub["rooms_eff"] = effective_rooms(ub)
+                ub["sqm_eff"] = effective_sqm(ub)
+                ub["sqm_build_eff"] = effective_sqm_build(ub)
+                ub["units_count_eff"] = effective_units(ub)
+                ub["garden_sqm_eff"] = effective_garden_sqm(ub)
+                ub["lot_sqm_eff"] = effective_lot_sqm(ub)
+                ub["price_per_sqm_eff"] = effective_price_per_sqm(ub)
+                yb = ub.get("year_built")
+                if yb and isinstance(yb, (int, float)):
+                    from datetime import datetime
+                    ub["building_age"] = datetime.utcnow().year - int(yb)
+                else:
+                    ub["building_age"] = None
+                self._write_json(200, {
+                    "status": "ok",
+                    "ok": True,
+                    "score": score,
+                    "score_reasons": reasons,
+                    "listing": ub,
+                })
                 return
             if self.path == "/api/scan":
                 if _scan_in_progress[0]:
