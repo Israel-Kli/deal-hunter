@@ -126,6 +126,12 @@ class ListingsRepo:
             if existing.get("price") and existing["price"] != listing.price:
                 prev_price = existing["price"]
 
+        log.debug(
+            "UPSERT %s:%s => %s",
+            listing.source, listing.source_id,
+            listing.model_dump_json(ensure_ascii=False),
+        )
+
         self.conn.execute(
             """INSERT INTO listings (
                 source, source_id, url,

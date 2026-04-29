@@ -130,7 +130,7 @@ Scoring falls back to `MARKET_REFS` bands. `fair_price_estimate` is always `None
 ## Testing
 
 ```bash
-pytest tests/
+.venv/bin/python -m pytest tests/
 ```
 
 Test fixtures in `tests/fixtures/` include Yad2, OnMap, Ad, and nadlan.gov.il sample data.
