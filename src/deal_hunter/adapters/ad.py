@@ -40,6 +40,7 @@ from deal_hunter.dates import earliest_yyyy_mm_dd, parse_dd_mm_yyyy
 from deal_hunter.http_client import fetch
 from deal_hunter.models import Listing
 from deal_hunter.normalize.israeli_cities import hebrew_allowed_city_keys, hebrew_city_match_key
+from deal_hunter.normalize.year_built import extract_year_built
 
 log = logging.getLogger(__name__)
 
@@ -239,6 +240,25 @@ class AdAdapter:
                 sqm_v = _first_float(wrapper_txt)
                 sqm = int(sqm_v) if sqm_v is not None else None
 
+        # Fallback: extract rooms/sq from any card text (e.g. "7 חד'", "120 מ'ר")
+        card_text = card.get_text(" ", strip=True)
+        if rooms is None:
+            rm_match = re.search(r"(\d+(?:\.\d+)?)\s*חד", card_text)
+            if rm_match:
+                rooms = float(rm_match.group(1))
+        if sqm is None:
+            sq_match = re.search(r"(\d+)\s*מ[״\"'׳]?ר", card_text)
+            if sq_match:
+                sqm = int(sq_match.group(1))
+
+        # is_agent detection from card text
+        is_agent = False
+        card_lower = card_text.lower()
+        for kw in AGENCY_KEYWORDS:
+            if kw in card_lower:
+                is_agent = True
+                break
+
         # Image (protocol-relative URLs on ad.co.il)
         images: list[str] = []
         img = card.find("img")
@@ -276,6 +296,7 @@ class AdAdapter:
             price=price,
             price_per_sqm=round(price / sqm) if sqm else None,
             listing_type="apartment",
+            is_agent=is_agent,
             images=images,
             tags=tags,
             first_listed_date="",
@@ -426,6 +447,15 @@ def _apply_detail_enrichment(listing: Listing, soup: BeautifulSoup) -> None:
             except ValueError:
                 pass
             break
+    # Fallback: scan all text for "קומה N"
+    if listing.floor is None:
+        body_text = soup.get_text(" ", strip=True)
+        fm = re.search(r"קומה\s+(-?\d+)", body_text)
+        if fm:
+            try:
+                listing.floor = int(fm.group(1))
+            except ValueError:
+                pass
 
     # Amenities: walk each i.fa-check / i.fa-times in the info block.
     for icon in soup.select("i.fa-check, i.fa-times"):
@@ -451,6 +481,18 @@ def _apply_detail_enrichment(listing: Listing, soup: BeautifulSoup) -> None:
         if isinstance(content, str) and content:
             listing.description = content.strip()[:2000]
 
+    # Fallback rooms/sq from detail page text if not parsed from card
+    if listing.rooms is None or listing.sqm is None:
+        dt = (soup.get_text(" ", strip=True) or "") if listing.rooms is None or listing.sqm is None else ""
+        if listing.rooms is None:
+            rm = re.search(r"(\d+(?:\.\d+)?)\s*חד", dt)
+            if rm:
+                listing.rooms = float(rm.group(1))
+        if listing.sqm is None:
+            sm = re.search(r"(\d+)\s*מ[״\"'׳]?ר", dt)
+            if sm:
+                listing.sqm = int(sm.group(1))
+
     # Agent/agency heuristic
     contact = soup.find(class_=re.compile(r"card-contacts"))
     if isinstance(contact, Tag):
@@ -473,3 +515,11 @@ def _apply_detail_enrichment(listing: Listing, soup: BeautifulSoup) -> None:
                 listing.first_listed_date,
                 d.isoformat(),
             )
+
+    # Year built from description
+    if listing.year_built is None and listing.description:
+        listing.year_built = extract_year_built(listing.description)
+    if listing.year_built is None:
+        body_text = soup.get_text(" ", strip=True) or ""
+        if body_text:
+            listing.year_built = extract_year_built(body_text)

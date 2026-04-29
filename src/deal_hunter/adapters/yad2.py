@@ -18,6 +18,7 @@ from typing import Any, Iterable
 from deal_hunter.adapters.base import SearchFilters
 from deal_hunter.http_client import fetch
 from deal_hunter.models import Comp, Listing
+from deal_hunter.normalize.year_built import extract_year_built
 
 log = logging.getLogger(__name__)
 
@@ -215,6 +216,7 @@ class Yad2Adapter:
         if not desc:
             desc = meta.get("description", "") or meta.get("text", "") or ""
         desc = _html.unescape(desc.strip()) if desc else ""
+        year_built = extract_year_built(desc)
         return Listing(
             source="yad2",
             source_id=token,
@@ -247,6 +249,7 @@ class Yad2Adapter:
             publish_date=pub_s,
             first_listed_date=pub_s,
             source_payload={"_slug": city.get("yad2_region") or city.get("slug", "")},
+            year_built=year_built,
         ), None
 
     def _enrich(self, listing: Listing, build_id: str, slug: str) -> str | None:
@@ -274,6 +277,9 @@ class Yad2Adapter:
             log.debug("Yad2 enrich HTML ok: token=%s html_len=%d", token, len(html))
         else:
             log.debug("Yad2 enrich HTML failed: token=%s", token)
+        # Extract year_built from description after enrichment
+        if listing.year_built is None:
+            listing.year_built = extract_year_built(listing.description)
         return html
 
 

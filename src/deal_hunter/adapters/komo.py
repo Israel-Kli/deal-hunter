@@ -20,11 +20,9 @@ from __future__ import annotations
 
 import html
 import logging
-import random
 import re
-import time
 from typing import Any, Iterable
-from urllib.parse import quote_plus, urlencode
+from urllib.parse import urlencode
 
 from bs4 import BeautifulSoup, Tag
 
@@ -32,6 +30,7 @@ from deal_hunter.adapters.base import SearchFilters
 from deal_hunter.http_client import fetch
 from deal_hunter.models import Listing
 from deal_hunter.normalize.israeli_cities import hebrew_allowed_city_keys, hebrew_city_match_key
+from deal_hunter.normalize.year_built import extract_year_built
 
 log = logging.getLogger(__name__)
 
@@ -276,6 +275,7 @@ class KomoAdapter:
             address=address,
             rooms=rooms,
             sqm=sqm,
+            sqm_build=sqm,
             floor=floor,
             price=price,
             price_per_sqm=round(price / sqm) if sqm else None,
@@ -389,6 +389,29 @@ def _apply_detail_enrichment(listing: Listing, soup: BeautifulSoup) -> None:
     description_text = soup.get_text(" ", strip=True)
     if description_text and not listing.description:
         listing.description = description_text[:2000]
+
+    # Amenity detection from description text
+    dl = description_text.lower() if description_text else ""
+    listing.parking = listing.parking or "חנייה" in dl or "חניה" in dl
+    listing.elevator = listing.elevator or "מעלית" in dl
+    listing.balcony = listing.balcony or "מרפסת" in dl
+    listing.ac = listing.ac or "מיזוג" in dl or "מזגן" in dl
+    listing.mamad = listing.mamad or "ממד" in dl or 'ממ"ד' in dl or "ממ״ד" in dl
+    listing.renovated = listing.renovated or "משופץ" in dl or "משופצת" in dl or "שיפוץ" in dl
+
+    # Floor from description if not already set
+    if listing.floor is None:
+        floor_m = re.search(r"קומה\s+(-?\d+)", dl)
+        if floor_m:
+            listing.floor = int(floor_m.group(1))
+        if listing.floor is None:
+            floor_m = re.search(r"קרקע", dl)
+            if floor_m:
+                listing.floor = 0
+
+    # Year built from description
+    if listing.year_built is None and description_text:
+        listing.year_built = extract_year_built(description_text)
 
     # More images from detail page
     for img in soup.select("img[src*='picNum']"):

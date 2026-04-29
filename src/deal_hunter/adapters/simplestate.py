@@ -8,7 +8,6 @@ text. Detail enrichment calls the per-property API endpoint.
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 import time
@@ -18,6 +17,7 @@ from urllib.parse import urlencode
 from deal_hunter.adapters.base import SearchFilters
 from deal_hunter.http_client import fetch
 from deal_hunter.models import Listing
+from deal_hunter.normalize.year_built import extract_year_built
 
 log = logging.getLogger(__name__)
 
@@ -143,6 +143,14 @@ class SimplestateAdapter:
             if prop.get("renovated") is True:
                 listing.renovated = True
 
+            # Year built from detail API
+            if listing.year_built is None:
+                yb = prop.get("year_built") or prop.get("build_year") or prop.get("construction_year")
+                if isinstance(yb, (int, float)) and 1900 <= yb <= 2100:
+                    listing.year_built = int(yb)
+                elif listing.description:
+                    listing.year_built = extract_year_built(listing.description)
+
         time.sleep(self.request_delay)
         return listing
 
@@ -240,9 +248,16 @@ class SimplestateAdapter:
         full_address = item.get("full_address") or item.get("address_display") or ""
         address = ", ".join(filter(None, [full_address or f"{street}, {neighborhood}, {city}"]))
 
-        # Description (mine for sqm / lot / units)
+        # Description (mine for sqm / lot / units as fallback)
         description = item.get("description") or ""
-        sqm_i = _extract_built_sqm(description)
+
+        # Built sqm - try structured fields first, fall back to description regex
+        built_from_api = item.get("size") or item.get("built_sqm") or item.get("area")
+        if isinstance(built_from_api, (int, float)) and built_from_api > 0:
+            sqm_i = int(built_from_api)
+        else:
+            sqm_i = _extract_built_sqm(description)
+
         lot_sqm = _extract_lot_sqm(description)
         garden_sqm = _extract_garden_sqm(description)
         units_count = _extract_units_count(description)
@@ -251,13 +266,18 @@ class SimplestateAdapter:
             log.debug("Simplestate filtered: reason=sqm_too_small prop_id=%s sqm=%s min=%s", prop_id, sqm_i, s["min_sqm"])
             return None, "sqm_too_small"
 
+        # Floor - try from feed item too (before detail enriches it)
+        floor_val = item.get("floor")
+        if isinstance(floor_val, (int, float)):
+            floor_i = int(floor_val)
+        elif isinstance(floor_val, str) and floor_val.isdigit():
+            floor_i = int(floor_val)
+        else:
+            floor_i = None
+
         # Parking
         parking_spaces = item.get("parking_spaces")
         parking = isinstance(parking_spaces, (int, float)) and parking_spaces > 0
-
-        # Floor
-        floor_val = item.get("floor")
-        floor_i = int(floor_val) if isinstance(floor_val, (int, float)) else None
 
         # Image
         images: list[str] = []
@@ -305,6 +325,7 @@ class SimplestateAdapter:
                 "_business_id": biz_id,
                 "_property_id": prop_id,
             },
+            year_built=extract_year_built(description),
         ), None
 
 

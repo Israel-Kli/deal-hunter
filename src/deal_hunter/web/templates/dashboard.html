@@ -138,6 +138,7 @@
     מתקנים — חניה, מרפסת, שיפוץ |
     מוכר — פרטי עדיף על תיווך |
     מו״מ — ירידת מחיר |
+    שנת בנייה — חדש (0–5) → +0.3, מודרני (6–15) → +0.1, ישן (36+) ← −0.2, ישן מאוד (50+) ← −0.4 |
     סיכון — מחיר גבוה מאוד (נזילות) |
     <b>לחץ על תא מגרש/בנוי/יחידות/גינה לעריכה</b>
   </div>
@@ -153,13 +154,14 @@
         <th class="col-city">עיר</th>
         <th class="col-addr">כתובת</th>
         <th class="col-src sort" data-key="source">מקור</th>
-        <th class="col-date sort" data-key="first_listed_date">עלייה ראשונה</th>
+        <th class="col-date sort" data-key="first_listed_date">גיל</th>
         <th class="col-type">סוג</th>
         <th class="col-desc">תיאור</th>
         <th class="col-num sort" data-key="rooms_eff">חדרים</th>
         <th class="col-num sort" data-key="units_count_eff">יחידות דיור</th>
         <th class="col-num sort" data-key="lot_sqm_eff">מגרש</th>
         <th class="col-num sort" data-key="sqm_build_eff">מ"ר בנוי</th>
+        <th class="col-num sort" data-key="building_age">גיל מבנה</th>
         <th class="col-num sort" data-key="garden_sqm_eff">גינה (מ״ר)</th>
         <th class="col-price sort" data-key="price">מחיר</th>
         <th class="col-ppsqm sort" data-key="price_per_sqm_eff">₪/מ"ר</th>
@@ -261,6 +263,10 @@ function fmtScoreReasons(reasons) {
     garden_bonus_source: 'מקור מגרש/גינה',
     matched_garden_phrases: 'ביטויי גינה',
     garden_sqm_used: 'גינה (מ״ר)',
+    year_built: 'שנת בנייה',
+    building_age: 'גיל מבנה (שנים)',
+    building_age_label: 'תווית גיל מבנה',
+    building_age_adjustment: 'התאמת גיל מבנה',
     final: 'ציון סופי',
   };
   const labels = {
@@ -273,8 +279,13 @@ function fmtScoreReasons(reasons) {
     'below band': 'מתחת לטווח',
     'in band': 'בתוך הטווח',
     'above band': 'מעל הטווח',
+    new_construction: 'בנייה חדשה (0–5)',
+    modern: 'מודרני (6–15)',
+    standard: 'סטנדרט (16–35)',
+    older: 'ישן (36–50)',
+    very_old: 'ישן מאוד (50+)',
   };
-  const priority = ['market_band','market_band_source','price_vs_market_delta','price_vs_market','price_per_sqm_used','description_unit_hit','matched_unit_phrases','description_unit_adjustment','description_unit_source','units_count_used','garden_bonus','garden_bonus_source','matched_garden_phrases','lot_sqm_used','garden_sqm_used','seller_channel','seller_adjustment','price_drop_pct','price_drop_bonus','risk_liquidity'];
+   const priority = ['market_band','market_band_source','price_vs_market_delta','price_vs_market','price_per_sqm_used','description_unit_hit','matched_unit_phrases','description_unit_adjustment','description_unit_source','units_count_used','garden_bonus','garden_bonus_source','matched_garden_phrases','lot_sqm_used','garden_sqm_used','year_built','building_age','building_age_label','building_age_adjustment','seller_channel','seller_adjustment','price_drop_pct','price_drop_bonus','risk_liquidity'];
   const entries = Object.entries(reasons).filter(([k]) => k !== 'final');
   entries.sort((a, b) => {
     const ia = priority.indexOf(a[0]);
@@ -779,6 +790,9 @@ function render() {
     const isFav = !!l.is_favorite;
     const favStar = isFav ? '★' : '☆';
     const favCls = 'fav-btn' + (isFav ? ' fav-on' : '');
+    const dateAge = l.first_listed_date ? Math.floor((Date.now() - new Date(l.first_listed_date + 'T00:00:00Z')) / 86400000) : null;
+    const dateDisplay = dateAge != null ? dateAge + 'd' : '—';
+    const dateTitle = l.first_listed_date || '';
     const ppsqmEff = l.price_per_sqm_eff != null ? '₪' + l.price_per_sqm_eff.toLocaleString() : '—';
     return '<tr>' +
       '<td class="col-fav"><button type="button" class="' + favCls + '" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '" aria-pressed="' + (isFav ? 'true' : 'false') + '" title="מועדף">' + favStar + '</button></td>' +
@@ -786,20 +800,21 @@ function render() {
       '<td class="col-city" title="' + escapeHtml(l.city || '') + '">' + (l.city || '—') + '</td>' +
       '<td class="col-addr"><div class="addr-wrap"><a class="addr-link" href="' + escapeHtml(sm.href) + '" target="_blank" rel="noopener" title="' + escapeHtml(sm.title) + '"><span class="addr-text"' + (addrFull ? ' title="' + escapeHtml(addrFull) + '"' : '') + '>' + escapeHtml(addrShort || '—') + '</span></a></div></td>' +
       '<td class="col-src"><a class="icon-btn icon-btn-source" href="' + escapeHtml(l.url) + '" target="_blank" rel="noopener" title="פתח מודעה ב־' + escapeHtml(sourceSiteTitle(l.source)) + '">' + srcImg + '</a></td>' +
-      '<td class="col-date">' + (l.first_listed_date ? escapeHtml(l.first_listed_date) : '—') + '</td>' +
+      '<td class="col-date" title="' + (dateTitle ? escapeHtml(dateTitle) : '') + '">' + dateDisplay + '</td>' +
       '<td class="col-type">' + badge + '</td>' +
       '<td class="col-desc"><div class="desc-stack">' + notesEditor + '</div></td>' +
       '<td class="col-num">' + editCellHtml(l, 'rooms', 'rooms_eff', 'rooms', true) + '</td>' +
       '<td class="col-num">' + editCellHtml(l, 'units_count', 'units_count_eff', 'units_count') + '</td>' +
       '<td class="col-num">' + editCellHtml(l, 'lot_sqm', 'lot_sqm_eff', 'lot_sqm') + '</td>' +
       '<td class="col-num">' + editCellHtml(l, 'sqm_build', 'sqm_build_eff', 'sqm_build') + '</td>' +
+      '<td class="col-num">' + (l.year_built != null ? l.year_built + (l.building_age != null ? ' (' + l.building_age + ')' : '') : l.building_age != null ? l.building_age : '—') + '</td>' +
       '<td class="col-num">' + editCellHtml(l, 'garden_sqm', 'garden_sqm_eff', 'garden_sqm') + '</td>' +
       '<td class="col-price">₪' + (l.price || 0).toLocaleString() + '</td>' +
       '<td class="col-ppsqm">' + ppsqmEff + '</td>' +
       '<td class="col-del"><button type="button" class="del-btn" data-source="' + escapeHtml(l.source) + '" data-source-id="' + escapeHtml(String(l.source_id)) + '" title="מחיקה לצמיתות">✕</button></td>' +
       '</tr>';
   }).join('');
-  document.getElementById('rows').innerHTML = html || '<tr><td colspan="16" class="muted">אין תוצאות</td></tr>';
+  document.getElementById('rows').innerHTML = html || '<tr><td colspan="17" class="muted">אין תוצאות</td></tr>';
   document.querySelectorAll('th.sort').forEach(th => {
     th.classList.toggle('sort-asc', th.dataset.key === sortKey && sortAsc);
     th.classList.toggle('sort-desc', th.dataset.key === sortKey && !sortAsc);

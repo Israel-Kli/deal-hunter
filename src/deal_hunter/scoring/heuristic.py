@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
 from deal_hunter.effective import (
@@ -123,6 +124,29 @@ def score_listing(listing: Listing) -> tuple[float, dict[str, Any]]:
         drop_bonus = min(1.0, max(0.0, drop / 5.0))
         reasons["price_drop_bonus"] = round(drop_bonus, 2)
         score += drop_bonus
+
+    if listing.year_built:
+        reasons["year_built"] = listing.year_built
+        current_yr = datetime.utcnow().year
+        age = current_yr - listing.year_built
+        reasons["building_age"] = age
+        if age <= 5:
+            adj = 0.3
+            reasons["building_age_label"] = "new_construction"
+        elif age <= 15:
+            adj = 0.1
+            reasons["building_age_label"] = "modern"
+        elif age <= 35:
+            adj = 0.0
+            reasons["building_age_label"] = "standard"
+        elif age <= 50:
+            adj = -0.2
+            reasons["building_age_label"] = "older"
+        else:
+            adj = -0.4
+            reasons["building_age_label"] = "very_old"
+        reasons["building_age_adjustment"] = round(adj, 2)
+        score += adj
 
     if price and price > 5_000_000:
         score -= 0.3

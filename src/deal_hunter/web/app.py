@@ -220,6 +220,8 @@ def _make_handler(cfg: Config):
                         garden_sqm_user=row.get("garden_sqm_user"),
                         units_count=row.get("units_count"),
                         garden_sqm=row.get("garden_sqm"),
+                        lot_sqm=row.get("lot_sqm"),
+                        year_built=row.get("year_built"),
                     )
                     new_score, new_reasons = score_listing(listing_for_score)
                     repo.conn.execute(
@@ -239,6 +241,8 @@ def _make_handler(cfg: Config):
                     "garden_sqm_eff": effective_garden_sqm(row),
                     "lot_sqm_eff": effective_lot_sqm(row),
                     "price_per_sqm_eff": effective_price_per_sqm(row),
+                    "year_built": row.get("year_built"),
+                    "building_age": new_reasons.get("building_age"),
                 }, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
