@@ -688,7 +688,7 @@ def _write_block(ws, sh, rows_out: list[list[Any]], disappeared_rows: list[int])
         for col_name in PRICE_COLUMNS:
             requests.append(_fmt_request(col_name, {"type": "NUMBER", "pattern": "#,##0"}))
         for col_name in NUMERIC_COLUMNS:
-            requests.append(_fmt_request(col_name, {"type": "NUMBER", "pattern": "0.##"}))
+            requests.append(_fmt_request(col_name, {"type": "NUMBER", "pattern": "#,##0.##"}))
         for col_name in DATE_COLUMNS:
             requests.append(_fmt_request(col_name, {"type": "DATE", "pattern": "yyyy-mm-dd"}))
 
