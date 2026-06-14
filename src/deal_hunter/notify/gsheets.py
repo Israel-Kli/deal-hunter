@@ -151,10 +151,8 @@ SHEET_COL_WIDTHS = [
 # Columns formatted as numbers with thousands separators.
 PRICE_COLUMNS = ("price", "price_per_sqm_eff", "price_before")
 
-# Plain numeric columns (display as bare integers, no thousands separators).
-NUMERIC_COLUMNS = (
-    "score",
-    "rooms_eff",
+# Integer columns — display as bare integers, no decimal point.
+INTEGER_COLUMNS = (
     "sqm_eff",
     "sqm_build_eff",
     "lot_sqm_eff",
@@ -162,6 +160,12 @@ NUMERIC_COLUMNS = (
     "floor",
     "building_age",
     "units_count_eff",
+)
+
+# Float columns — always show one decimal (e.g. Score 7.5).
+FLOAT_COLUMNS = (
+    "score",
+    "rooms_eff",
 )
 
 # Date columns — render as yyyy-mm-dd regardless of how Sheets auto-parses them.
@@ -687,8 +691,10 @@ def _write_block(ws, sh, rows_out: list[list[Any]], disappeared_rows: list[int])
     if rows_out:
         for col_name in PRICE_COLUMNS:
             requests.append(_fmt_request(col_name, {"type": "NUMBER", "pattern": "#,##0"}))
-        for col_name in NUMERIC_COLUMNS:
-            requests.append(_fmt_request(col_name, {"type": "NUMBER", "pattern": "#,##0.##"}))
+        for col_name in INTEGER_COLUMNS:
+            requests.append(_fmt_request(col_name, {"type": "NUMBER", "pattern": "0"}))
+        for col_name in FLOAT_COLUMNS:
+            requests.append(_fmt_request(col_name, {"type": "NUMBER", "pattern": "0.0"}))
         for col_name in DATE_COLUMNS:
             requests.append(_fmt_request(col_name, {"type": "DATE", "pattern": "yyyy-mm-dd"}))
 
