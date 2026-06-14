@@ -53,6 +53,14 @@
   "scoring": {
     "alert_threshold": 7.0
   },
+  "gsheets": {
+    "enabled": false,
+    "sheet_id": "",
+    "credentials_path": "credentials.json",
+    "tab_name": "Deal Hunter-2026",
+    "disappeared_cutoff_minutes": null,
+    "audit_max_entries": 20
+  },
   "dashboard_port": 8081,
   "data_dir": "data",
   "onmap_cities": ["tel-aviv-yafo", "ramat-gan", "givatayim"],

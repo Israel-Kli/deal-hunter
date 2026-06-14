@@ -285,6 +285,26 @@ def run_once(cfg: cfg_mod.Config, *, enrich: bool = False, max_items: int | None
     except Exception:
         log.exception("dedup pass failed")
 
+    if cfg.gsheets.enabled:
+        try:
+            from deal_hunter.notify import gsheets
+
+            with ListingsRepo(db_path) as repo:
+                listings = repo.all_for_dashboard()
+            cutoff = cfg.gsheets.disappeared_cutoff_minutes
+            if cutoff is None:
+                cutoff = max(2 * cfg.schedule.poll_interval_minutes, 120)
+            gsheets.sync(
+                listings,
+                sheet_id=cfg.gsheets.sheet_id,
+                credentials_path=cfg.gsheets.credentials_path,
+                tab_name=cfg.gsheets.tab_name,
+                disappeared_cutoff_minutes=cutoff,
+                audit_max_entries=cfg.gsheets.audit_max_entries,
+            )
+        except Exception:
+            log.exception("gsheets sync failed")
+
     return total_alerts
 
 

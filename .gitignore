@@ -21,6 +21,7 @@ apartments.json
 .env
 .env.local
 configs/config.json
+credentials.json
 
 # Upstream dumps
 _upstream/dump_*.json
