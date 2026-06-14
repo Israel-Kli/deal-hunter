@@ -151,6 +151,27 @@ SHEET_COL_WIDTHS = [
 # Columns formatted as numbers with thousands separators.
 PRICE_COLUMNS = ("price", "price_per_sqm_eff", "price_before")
 
+# Plain numeric columns (display as bare integers, no thousands separators).
+NUMERIC_COLUMNS = (
+    "score",
+    "rooms_eff",
+    "sqm_eff",
+    "sqm_build_eff",
+    "lot_sqm_eff",
+    "garden_sqm_eff",
+    "floor",
+    "building_age",
+    "units_count_eff",
+)
+
+# Date columns — render as yyyy-mm-dd regardless of how Sheets auto-parses them.
+DATE_COLUMNS = (
+    "first_listed_date",
+    "last_seen_at",
+    "disappeared_on",
+    "last_changed",
+)
+
 # Columns whose values participate in the Change Log diff. Identity,
 # rolling dates, and audit columns are excluded.
 DATA_COLUMNS_FOR_DIFF = [
@@ -649,20 +670,27 @@ def _write_block(ws, sh, rows_out: list[list[Any]], disappeared_rows: list[int])
             }
         })
 
-    # Number formatting on price columns
+    # Explicit per-column number formats. Clears any inherited format from
+    # previous schemas (e.g. a Units integer showing as 1900-01-02 because the
+    # column position used to hold dates).
+    def _fmt_request(col_name: str, number_format: dict) -> dict:
+        col_idx = SHEET_COLUMNS.index(col_name)
+        return {
+            "repeatCell": {
+                "range": {"sheetId": sheet_meta_id,
+                          "startRowIndex": LEGEND_ROWS, "endRowIndex": data_end,
+                          "startColumnIndex": col_idx, "endColumnIndex": col_idx + 1},
+                "cell": {"userEnteredFormat": {"numberFormat": number_format}},
+                "fields": "userEnteredFormat.numberFormat",
+            }
+        }
     if rows_out:
         for col_name in PRICE_COLUMNS:
-            col_idx = SHEET_COLUMNS.index(col_name)
-            requests.append({
-                "repeatCell": {
-                    "range": {"sheetId": sheet_meta_id,
-                              "startRowIndex": LEGEND_ROWS, "endRowIndex": data_end,
-                              "startColumnIndex": col_idx, "endColumnIndex": col_idx + 1},
-                    "cell": {"userEnteredFormat": {
-                        "numberFormat": {"type": "NUMBER", "pattern": "#,##0"}}},
-                    "fields": "userEnteredFormat.numberFormat",
-                }
-            })
+            requests.append(_fmt_request(col_name, {"type": "NUMBER", "pattern": "#,##0"}))
+        for col_name in NUMERIC_COLUMNS:
+            requests.append(_fmt_request(col_name, {"type": "NUMBER", "pattern": "0.##"}))
+        for col_name in DATE_COLUMNS:
+            requests.append(_fmt_request(col_name, {"type": "DATE", "pattern": "yyyy-mm-dd"}))
 
     # Reset all data rows to white background first
     if rows_out:
