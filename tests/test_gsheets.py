@@ -49,13 +49,75 @@ def _listing(**overrides):
     return base
 
 
-def test_features_summary():
-    d = {"parking": True, "balcony": True, "renovated": False, "elevator": True}
-    assert gs._features_summary(d) == "P B E"
+def test_no_features_column():
+    assert "features" not in gs.SHEET_COLUMNS
+    assert "Features" not in gs.SHEET_HEADERS
 
 
-def test_features_summary_empty():
-    assert gs._features_summary({}) == ""
+def test_no_age_column():
+    assert "building_age" not in gs.SHEET_COLUMNS
+    assert "Age" not in gs.SHEET_HEADERS
+
+
+def test_sale_type_column_position():
+    """Sale Type must sit immediately after Source."""
+    assert "sale_type" in gs.SHEET_COLUMNS
+    src_idx = gs.SHEET_COLUMNS.index("source")
+    sale_idx = gs.SHEET_COLUMNS.index("sale_type")
+    assert sale_idx == src_idx + 1
+
+
+def test_sale_type_value_agent_vs_direct():
+    rows, _ = gs._build_rows(
+        [_listing(is_agent=True), _listing(source_id="x2", is_agent=False)],
+        {}, cutoff_minutes=120, audit_max=20,
+        today=FIXED_TODAY, now=FIXED_NOW,
+    )
+    sale_idx = gs.SHEET_COLUMNS.index("sale_type")
+    values = {r[sale_idx] for r in rows}
+    assert values == {"Agent", "Direct"}
+
+
+def test_user_edit_preserved_via_shadow():
+    """If user edits a cell, next cycle keeps their value."""
+    # Simulate cycle 1: write the listing and capture its shadow.
+    rows1, _ = gs._build_rows(
+        [_listing(price=2_000_000)], {}, cutoff_minutes=120, audit_max=20,
+        today=FIXED_TODAY, now=FIXED_NOW,
+    )
+    shadow_str = rows1[0][gs.SHEET_COLUMNS.index("sync_shadow")]
+    # Simulate user editing the price cell in the sheet from 2,000,000 to 1,800,000.
+    existing = _row_to_strings(rows1[0])
+    existing["price"] = "1800000"  # what the sheet now shows
+    existing["sync_shadow"] = shadow_str
+    existing_map = {("yad2", "abc123"): existing}
+
+    # Cycle 2: DB still has price = 2,000,000.
+    rows2, _ = gs._build_rows(
+        [_listing(price=2_000_000)], existing_map, cutoff_minutes=120, audit_max=20,
+        today=FIXED_TODAY, now=FIXED_NOW,
+    )
+    price_idx = gs.SHEET_COLUMNS.index("price")
+    assert rows2[0][price_idx] == 1_800_000  # user edit preserved
+
+
+def test_no_user_edit_uses_fresh_db_value():
+    """If user did not touch a cell, next cycle uses the DB value."""
+    rows1, _ = gs._build_rows(
+        [_listing(price=2_000_000)], {}, cutoff_minutes=120, audit_max=20,
+        today=FIXED_TODAY, now=FIXED_NOW,
+    )
+    existing = _row_to_strings(rows1[0])
+    existing["sync_shadow"] = rows1[0][gs.SHEET_COLUMNS.index("sync_shadow")]
+    existing_map = {("yad2", "abc123"): existing}
+
+    # Cycle 2: DB now has price = 1,900,000 (a real price drop), user didn't edit.
+    rows2, _ = gs._build_rows(
+        [_listing(price=1_900_000)], existing_map, cutoff_minutes=120, audit_max=20,
+        today=FIXED_TODAY, now=FIXED_NOW,
+    )
+    price_idx = gs.SHEET_COLUMNS.index("price")
+    assert rows2[0][price_idx] == 1_900_000  # fresh DB value
 
 
 def test_index_to_letter():
@@ -332,8 +394,11 @@ def _row_to_strings(row):
 
 
 def _make_existing_row(listing_dict, *, disappeared_on="", last_changed="", change_log=""):
-    """Build a sheet-row dict (strings) from a listing dict, plus audit columns."""
+    """Build a sheet-row dict (strings) from a listing dict, plus audit columns.
+    Includes a sync_shadow that mirrors the editable columns — simulates a row
+    that was previously written by the sync."""
     data = gs._build_data_dict(listing_dict)
+    shadow = {col: data.get(col) for col in gs.EDITABLE_COLUMNS}
     out: dict[str, str] = {}
     for col in gs.SHEET_COLUMNS:
         if col == "disappeared_on":
@@ -342,6 +407,8 @@ def _make_existing_row(listing_dict, *, disappeared_on="", last_changed="", chan
             out[col] = last_changed
         elif col == "change_log":
             out[col] = change_log
+        elif col == "sync_shadow":
+            out[col] = json.dumps(shadow, ensure_ascii=False)
         else:
             v = gs._coerce_cell(data.get(col))
             out[col] = "" if v == "" else str(v)

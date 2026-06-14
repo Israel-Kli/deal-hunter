@@ -35,6 +35,7 @@ log = logging.getLogger(__name__)
 SHEET_COLUMNS = [
     "score",
     "source",
+    "sale_type",
     "city",
     "neighborhood",
     "street",
@@ -48,9 +49,7 @@ SHEET_COLUMNS = [
     "price",
     "price_per_sqm_eff",
     "price_before",
-    "features",
     "listing_type",
-    "building_age",
     "units_count_eff",
     "first_listed_date",
     "last_seen_at",
@@ -59,11 +58,13 @@ SHEET_COLUMNS = [
     "source_id",
     "last_changed",
     "change_log",
+    "sync_shadow",
 ]
 
 SHEET_HEADERS = [
     "Score",
     "Source",
+    "Sale Type",
     "City",
     "Neighborhood",
     "Street",
@@ -77,9 +78,7 @@ SHEET_HEADERS = [
     "Price",
     "₪/m²",
     "Prev Price",
-    "Features",
     "Type",
-    "Age",
     "Units",
     "First Listed",
     "Last Seen",
@@ -88,11 +87,13 @@ SHEET_HEADERS = [
     "Source ID",
     "Last Changed",
     "Change Log",
+    "Sync Shadow",
 ]
 
 SHEET_LEGEND = [
     "Heuristic 1–10 investment score",
     "Scraper (yad2, onmap, ad, …); click to open listing",
+    "Agent vs Direct sale — Agent rows highlighted light red. Editable.",
     "City",
     "Neighborhood",
     "Street",
@@ -106,9 +107,7 @@ SHEET_LEGEND = [
     "Asking price, ₪",
     "Effective price per m² — gradient green→red (lower is better)",
     "Previous asking price, ₪ (if dropped)",
-    "Compact features: P=parking, B=balcony, R=renovated, A=AC, M=mamad, E=elevator",
-    "Private vs agent",
-    "Years since year_built",
+    "Property type (apartment / house / cottage / …)",
     "יחידות דיור count if extracted",
     "Earliest publish/first-seen date",
     "Most recent crawl that observed the listing",
@@ -117,11 +116,13 @@ SHEET_LEGEND = [
     "Per-source listing token; combined with Source forms the unique row key",
     "Most recent date any data field on this row differed from the previous cycle",
     "JSON log of the last N change entries; each entry has ts + changes/disappeared/reappeared",
+    "Internal: snapshot of the values this row last received from the sync (used to detect user edits)",
 ]
 
 SHEET_COL_WIDTHS = [
     55,   # score
     90,   # source (hyperlink)
+    80,   # sale type
     100,  # city
     120,  # neighborhood
     140,  # street
@@ -135,9 +136,7 @@ SHEET_COL_WIDTHS = [
     100,  # price
     80,   # ₪/m²
     100,  # prev price
-    100,  # features
-    70,   # listing_type
-    50,   # age
+    70,   # type
     50,   # units
     100,  # first listed
     100,  # last seen
@@ -146,6 +145,7 @@ SHEET_COL_WIDTHS = [
     140,  # source id
     100,  # last changed
     280,  # change log
+    40,   # sync shadow (hidden)
 ]
 
 # Columns formatted as numbers with thousands separators.
@@ -158,7 +158,6 @@ INTEGER_COLUMNS = (
     "lot_sqm_eff",
     "garden_sqm_eff",
     "floor",
-    "building_age",
     "units_count_eff",
 )
 
@@ -180,6 +179,7 @@ DATE_COLUMNS = (
 # rolling dates, and audit columns are excluded.
 DATA_COLUMNS_FOR_DIFF = [
     "score",
+    "sale_type",
     "city",
     "neighborhood",
     "street",
@@ -193,11 +193,14 @@ DATA_COLUMNS_FOR_DIFF = [
     "price",
     "price_per_sqm_eff",
     "price_before",
-    "features",
     "listing_type",
-    "building_age",
     "units_count_eff",
 ]
+
+# Columns whose user-edited values are preserved across sync cycles. The merge
+# logic uses Sync Shadow (last-written snapshot) to detect cells changed by the
+# user since the last sync and keeps those user values.
+EDITABLE_COLUMNS = tuple(DATA_COLUMNS_FOR_DIFF)
 
 LEGEND_ROWS = 1  # only row 1 (headers). Legend is attached as cell notes.
 
@@ -225,21 +228,6 @@ def _parse_iso_dt(s: str | None) -> datetime | None:
         return None
 
 
-def _features_summary(d: dict[str, Any]) -> str:
-    parts = []
-    for label, key in (
-        ("P", "parking"),
-        ("B", "balcony"),
-        ("R", "renovated"),
-        ("A", "ac"),
-        ("M", "mamad"),
-        ("E", "elevator"),
-    ):
-        if d.get(key):
-            parts.append(label)
-    return " ".join(parts)
-
-
 def _score_reasons_summary(d: dict[str, Any]) -> str:
     reasons = d.get("score_reasons") or {}
     if not isinstance(reasons, dict):
@@ -253,13 +241,6 @@ def _score_reasons_summary(d: dict[str, Any]) -> str:
         else:
             parts.append(f"{k}:{v}")
     return ", ".join(parts[:8])
-
-
-def _building_age(d: dict[str, Any]) -> int | None:
-    yb = d.get("year_built")
-    if isinstance(yb, (int, float)) and yb > 0:
-        return datetime.now(timezone.utc).year - int(yb)
-    return None
 
 
 def _coerce_cell(v: Any) -> Any:
@@ -284,6 +265,7 @@ def _build_data_dict(listing: dict[str, Any]) -> dict[str, Any]:
     return {
         "score": listing.get("score"),
         "source": listing.get("source", ""),
+        "sale_type": "Agent" if listing.get("is_agent") else "Direct",
         "city": listing.get("city", ""),
         "neighborhood": listing.get("neighborhood", ""),
         "street": listing.get("street", ""),
@@ -297,9 +279,7 @@ def _build_data_dict(listing: dict[str, Any]) -> dict[str, Any]:
         "price": listing.get("price"),
         "price_per_sqm_eff": effective_price_per_sqm(listing),
         "price_before": listing.get("price_before"),
-        "features": _features_summary(listing),
         "listing_type": listing.get("listing_type", ""),
-        "building_age": _building_age(listing),
         "units_count_eff": effective_units(listing),
         "first_listed_date": (listing.get("first_listed_date") or "")[:10],
         "last_seen_at": (str(listing.get("last_seen_at") or ""))[:10],
@@ -315,6 +295,7 @@ def _row_from_data(
     disappeared_on: str = "",
     last_changed: str = "",
     change_log: str = "",
+    sync_shadow: str = "",
 ) -> list[Any]:
     out: list[Any] = []
     for col in SHEET_COLUMNS:
@@ -333,6 +314,8 @@ def _row_from_data(
             out.append(last_changed)
         elif col == "change_log":
             out.append(change_log)
+        elif col == "sync_shadow":
+            out.append(sync_shadow)
         else:
             out.append(_coerce_cell(data.get(col)))
     return out
@@ -371,6 +354,78 @@ def _load_log(s: str | None) -> list[dict]:
         return v if isinstance(v, list) else []
     except (json.JSONDecodeError, TypeError):
         return []
+
+
+def _load_shadow(s: str | None) -> dict[str, Any]:
+    if not s:
+        return {}
+    try:
+        v = json.loads(s)
+        return v if isinstance(v, dict) else {}
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
+def _norm(v: Any) -> str:
+    """Normalize a value for cell-equality comparison: strip thousands separators."""
+    if v is None:
+        return ""
+    return str(v).replace(",", "").strip()
+
+
+def _coerce_back(s: Any, fresh_v: Any) -> Any:
+    """Convert a sheet cell value back into the type implied by `fresh_v`.
+    Used when preserving a user-edited cell so the merged value keeps proper type.
+    """
+    if s is None or s == "":
+        return None
+    s_str = _norm(s)
+    if isinstance(fresh_v, bool):
+        return s_str.lower() in ("true", "yes", "1")
+    if isinstance(fresh_v, int) and not isinstance(fresh_v, bool):
+        try:
+            return int(float(s_str))
+        except (ValueError, TypeError):
+            return s_str
+    if isinstance(fresh_v, float):
+        try:
+            return float(s_str)
+        except (ValueError, TypeError):
+            return s_str
+    return str(s).strip()
+
+
+def _merge_user_edits(
+    prior: dict[str, Any],
+    shadow: dict[str, Any],
+    fresh_data: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """For each EDITABLE column: if the prior sheet cell differs from the shadow
+    (what we last wrote), the user edited it — preserve their value. Otherwise
+    use the fresh value from the DB. Returns (merged, new_shadow)."""
+    merged = dict(fresh_data)
+    new_shadow: dict[str, Any] = {}
+    for col in EDITABLE_COLUMNS:
+        fresh_v = fresh_data.get(col)
+        if col in shadow:
+            existing = prior.get(col, "")
+            shadow_v = shadow.get(col)
+            if _norm(existing) != _norm(shadow_v):
+                merged[col] = _coerce_back(existing, fresh_v)
+        new_shadow[col] = merged.get(col)
+    return merged, new_shadow
+
+
+def _diff_shadow(shadow: dict[str, Any], merged: dict[str, Any]) -> dict[str, list]:
+    """Return {col: [old_shadow_value, new_merged_value]} for DATA columns that
+    differ between the last-written shadow and the value we are about to write."""
+    changes: dict[str, list] = {}
+    for col in DATA_COLUMNS_FOR_DIFF:
+        old = shadow.get(col)
+        new = merged.get(col)
+        if _norm(old) != _norm(new):
+            changes[col] = [old, new]
+    return changes
 
 
 def _trim_log(entries: list, cap: int) -> list:
@@ -438,7 +493,7 @@ def _build_rows(
     now = now or _now_utc()
     cutoff_ts = now.timestamp() - cutoff_minutes * 60
 
-    records: list[tuple[tuple, dict[str, Any], str, str, str]] = []
+    records: list[tuple[tuple, dict[str, Any], str, str, str, str]] = []
 
     for listing in listings:
         source = listing.get("source", "")
@@ -447,12 +502,23 @@ def _build_rows(
             continue
         key = (source, source_id)
         prior = existing.get(key, {})
+        shadow = _load_shadow(prior.get("sync_shadow", ""))
 
         last_seen = _parse_iso_dt(listing.get("last_seen_at"))
         is_active = last_seen is not None and last_seen.timestamp() >= cutoff_ts
 
-        data = _build_data_dict(listing)
-        diff = _diff(prior, data)
+        fresh_data = _build_data_dict(listing)
+        merged, new_shadow = _merge_user_edits(prior, shadow, fresh_data)
+
+        # Brand-new row: record an initial snapshot diff.
+        # Existing row with a shadow: real per-cycle diff.
+        # Existing row without a shadow (migration from older schema): skip the
+        # diff this cycle so we don't spam the change-log with "every cell
+        # changed" on the migration boundary.
+        if not prior or shadow:
+            diff = _diff_shadow(shadow, merged)
+        else:
+            diff = {}
 
         log_entries = _load_log(prior.get("change_log"))
 
@@ -480,10 +546,13 @@ def _build_rows(
         change_log_str = (
             json.dumps(log_entries, ensure_ascii=False) if log_entries else ""
         )
+        sync_shadow_str = (
+            json.dumps(new_shadow, ensure_ascii=False) if new_shadow else ""
+        )
 
         if not disappeared_on:
-            fl = data.get("first_listed_date") or ""
-            score_val = data.get("score") or 0
+            fl = merged.get("first_listed_date") or ""
+            score_val = merged.get("score") or 0
             try:
                 score_f = float(score_val)
             except (TypeError, ValueError):
@@ -492,18 +561,19 @@ def _build_rows(
         else:
             sort_key = (1, _date_desc_key(disappeared_on), 0.0)
 
-        records.append((sort_key, data, disappeared_on, last_changed, change_log_str))
+        records.append((sort_key, merged, disappeared_on, last_changed, change_log_str, sync_shadow_str))
 
     records.sort(key=lambda x: x[0])
 
     rows_out: list[list[Any]] = []
     disappeared_rows: list[int] = []
-    for idx, (_sk, data, disappeared_on, last_changed, change_log_str) in enumerate(records):
+    for idx, (_sk, data, disappeared_on, last_changed, change_log_str, sync_shadow_str) in enumerate(records):
         row = _row_from_data(
             data,
             disappeared_on=disappeared_on,
             last_changed=last_changed,
             change_log=change_log_str,
+            sync_shadow=sync_shadow_str,
         )
         rows_out.append(row)
         if disappeared_on:
@@ -748,6 +818,33 @@ def _write_block(ws, sh, rows_out: list[list[Any]], disappeared_rows: list[int])
             }
         })
 
+    # Light-red background for "Agent" rows in the Sale Type column
+    if rows_out:
+        sale_idx = SHEET_COLUMNS.index("sale_type")
+        requests.append({
+            "addConditionalFormatRule": {
+                "rule": {
+                    "ranges": [{
+                        "sheetId": sheet_meta_id,
+                        "startRowIndex": LEGEND_ROWS, "endRowIndex": data_end,
+                        "startColumnIndex": sale_idx, "endColumnIndex": sale_idx + 1,
+                    }],
+                    "booleanRule": {
+                        "condition": {
+                            "type": "TEXT_EQ",
+                            "values": [{"userEnteredValue": "Agent"}],
+                        },
+                        "format": {
+                            "backgroundColor": {
+                                "red": 0.99, "green": 0.85, "blue": 0.85,
+                            },
+                        },
+                    },
+                },
+                "index": 1,
+            }
+        })
+
     # Column widths
     for col_idx, px in enumerate(SHEET_COL_WIDTHS):
         requests.append({
@@ -758,6 +855,17 @@ def _write_block(ws, sh, rows_out: list[list[Any]], disappeared_rows: list[int])
                 "fields": "pixelSize",
             }
         })
+
+    # Hide the Sync Shadow column from the user view (it's internal state)
+    shadow_idx = SHEET_COLUMNS.index("sync_shadow")
+    requests.append({
+        "updateDimensionProperties": {
+            "range": {"sheetId": sheet_meta_id, "dimension": "COLUMNS",
+                      "startIndex": shadow_idx, "endIndex": shadow_idx + 1},
+            "properties": {"hiddenByUser": True},
+            "fields": "hiddenByUser",
+        }
+    })
 
     # Basic filter on header + data range (replaces any existing filter)
     requests.append({
