@@ -87,6 +87,16 @@ class AIMapperCfg(BaseModel):
     api_key_env: str = "GEMINI_API_KEY"
 
 
+class GSheetsCfg(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = False
+    sheet_id: str = ""
+    credentials_path: str = "credentials.json"
+    tab_name: str = "Deal Hunter-2026"
+    disappeared_cutoff_minutes: int | None = None
+    audit_max_entries: int = 20
+
+
 class Config(BaseModel):
     model_config = ConfigDict(extra="forbid")
     search: SearchCfg = Field(default_factory=SearchCfg)
@@ -97,6 +107,7 @@ class Config(BaseModel):
     notifications: NotificationsCfg = Field(default_factory=NotificationsCfg)
     scoring: ScoringCfg = Field(default_factory=ScoringCfg)
     ai_mapper: AIMapperCfg = Field(default_factory=AIMapperCfg)
+    gsheets: GSheetsCfg = Field(default_factory=GSheetsCfg)
     dashboard_port: int = 8081
     dashboard_host: str = "127.0.0.1"
     data_dir: str = "data"
@@ -112,6 +123,13 @@ def _env_override(cfg: dict[str, Any]) -> dict[str, Any]:
     if cid := os.environ.get("TELEGRAM_CHAT_ID"):
         n["telegram_chat_id"] = cid
         log.debug("TELEGRAM_CHAT_ID overridden from env")
+    g = cfg.setdefault("gsheets", {})
+    if sid := os.environ.get("GSHEET_ID"):
+        g["sheet_id"] = sid
+        log.debug("GSHEET_ID overridden from env")
+    if gc := os.environ.get("GSHEET_CREDENTIALS"):
+        g["credentials_path"] = gc
+        log.debug("GSHEET_CREDENTIALS overridden from env")
     return cfg
 
 
