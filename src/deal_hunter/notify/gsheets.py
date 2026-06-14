@@ -167,7 +167,6 @@ FLOAT_COLUMNS = (
 
 # Date columns — render as yyyy-mm-dd regardless of how Sheets auto-parses them.
 DATE_COLUMNS = (
-    "first_listed_date",
     "last_seen_at",
     "disappeared_on",
     "last_changed",
