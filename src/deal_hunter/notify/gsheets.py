@@ -22,7 +22,6 @@ from deal_hunter.effective import (
     effective_garden_sqm,
     effective_lot_sqm,
     effective_rooms,
-    effective_sqm,
     effective_sqm_build,
     effective_units,
 )
@@ -33,25 +32,24 @@ log = logging.getLogger(__name__)
 # Column order (also the order of cells in each row).
 SHEET_COLUMNS = [
     "score",
-    "source",
-    "sale_type",
     "city",
     "neighborhood",
     "address",
+    "source",
+    "sale_type",
+    "age_days",
+    "listing_type",
+    "description",
+    "comments",
     "rooms_eff",
-    "sqm_eff",
-    "sqm_build_eff",
+    "units_count_eff",
     "lot_sqm_eff",
+    "sqm_build_eff",
     "garden_sqm_eff",
     "floor",
     "price",
     "price_per_sqm_eff",
     "price_before",
-    "listing_type",
-    "units_count_eff",
-    "first_listed_date",
-    "description",
-    "comments",
     "last_seen_at",
     "why_score",
     "disappeared_on",
@@ -62,92 +60,89 @@ SHEET_COLUMNS = [
 ]
 
 SHEET_HEADERS = [
-    "Score",
-    "Source",
-    "Sale Type",
-    "City",
-    "Neighborhood",
-    "Address",
-    "Rooms",
-    "SQM",
-    "Built m²",
-    "Lot m²",
-    "Garden m²",
-    "Floor",
-    "Price",
-    "₪/m²",
-    "Prev Price",
-    "Type",
-    "Units",
-    "First Listed",
-    "Description",
-    "Comments",
-    "Last Seen",
-    "Why Score",
-    "Disappeared On",
-    "Source ID",
-    "Last Changed",
-    "Change Log",
-    "Sync Shadow",
+    "ציון",
+    "עיר",
+    "שכונה",
+    "כתובת",
+    "מקור",
+    "סוג מוכר",
+    "גיל",
+    "סוג",
+    "תיאור",
+    "הערות",
+    "חדרים",
+    "יחידות דיור",
+    "מגרש",
+    "מ\"ר בנוי",
+    "גינה (מ\"ר)",
+    "קומה",
+    "מחיר",
+    "₪/מ\"ר",
+    "מחיר קודם",
+    "נצפה לאחרונה",
+    "פירוט ניקוד",
+    "תאריך היעלמות",
+    "מזהה מקור",
+    "שינוי אחרון",
+    "יומן שינויים",
+    "צל סנכרון",
 ]
 
 SHEET_LEGEND = [
-    "Heuristic 1–10 investment score",
-    "Scraper (yad2, onmap, ad, …); click to open listing",
-    "Agent vs Direct sale — Agent rows highlighted light red. Editable.",
-    "City",
-    "Neighborhood",
-    "Street + house number combined",
-    "Effective room count (user override or extracted)",
-    "Effective interior floor area, m²",
-    "Effective built area, m² (מ\"ר בנוי) — includes walls / balconies / service areas",
-    "Effective plot / lot size, m² (מגרש)",
-    "Effective garden area, m² (גינה)",
-    "Floor number",
-    "Asking price, ₪",
-    "Live formula: Price ÷ SQM — gradient green→red (lower is better)",
-    "Previous asking price, ₪ (if dropped)",
-    "Property type (apartment / house / cottage / …)",
-    "יחידות דיור count if extracted",
-    "Earliest publish/first-seen date",
-    "Free-text description scraped from the listing (single-line, clipped — click to expand)",
-    "Manual: free-form notes — preserved across syncs",
-    "Most recent crawl that observed the listing",
-    "Concise summary derived from score_reasons",
-    "Date the listing stopped appearing in any source; row turns grey when set",
-    "Per-source listing token; combined with Source forms the unique row key",
-    "Most recent date any data field on this row differed from the previous cycle",
-    "JSON log of the last N change entries; each entry has ts + changes/disappeared/reappeared",
-    "Internal: snapshot of the values this row last received from the sync (used to detect user edits)",
+    "ציון השקעה היוריסטי 1–10",
+    "עיר",
+    "שכונה",
+    "כתובת — לחיצה פותחת ב-Google Street View",
+    "מקור הסקרייפ (yad2 / onmap / ad / …) — לחיצה פותחת את המודעה",
+    "מתווך מול ישיר — שורות מתווך מסומנות בוורוד בהיר. ניתן לעריכה.",
+    "גיל המודעה בימים מאז התאריך המוקדם ביותר שראינו",
+    "סוג הנכס (דירה / בית פרטי / קוטג' / …)",
+    "תיאור המודעה — שורה אחת, חתוך. לחיצה תפתח את כל הטקסט.",
+    "ידני: הערות חופשיות — נשמרות בין סנכרונים",
+    "חדרים אפקטיביים (override של המשתמש או מהמקור)",
+    "מספר יחידות דיור אם זוהו",
+    "מגרש אפקטיבי, מ\"ר",
+    "מ\"ר בנוי אפקטיבי (כולל קירות / מרפסות / שטחי שירות)",
+    "גינה אפקטיבית, מ\"ר",
+    "מספר קומה",
+    "מחיר מבוקש, ₪",
+    "נוסחה חיה: מחיר ÷ מ\"ר בנוי — גרדיאנט ירוק→אדום (נמוך זה טוב יותר)",
+    "מחיר קודם, ₪ (אם ירד)",
+    "תאריך הסריקה האחרונה שראתה את המודעה",
+    "תקציר נימוקי הניקוד",
+    "התאריך שבו המודעה הפסיקה להופיע באף מקור; השורה הופכת אפורה",
+    "טוקן המודעה במקור; ביחד עם 'מקור' מהווה את המפתח הייחודי של השורה",
+    "התאריך האחרון שבו ערך כלשהו בשורה השתנה לעומת המחזור הקודם",
+    "יומן JSON של עד N השינויים האחרונים; כל רשומה כוללת ts + שינויים/היעלמות/חזרה",
+    "פנימי: צילום הערכים שהשורה הזו קיבלה במחזור האחרון (משמש לזיהוי עריכות משתמש)",
 ]
 
 SHEET_COL_WIDTHS = [
-    55,   # score
-    90,   # source (hyperlink)
-    80,   # sale type
-    100,  # city
-    120,  # neighborhood
-    180,  # address
-    55,   # rooms
-    55,   # sqm
-    65,   # built m²
-    65,   # lot m²
-    65,   # garden m²
-    55,   # floor
-    100,  # price
-    80,   # ₪/m²
-    100,  # prev price
-    70,   # type
-    50,   # units
-    100,  # first listed
-    320,  # description
-    220,  # comments
-    100,  # last seen
-    220,  # why score
-    100,  # disappeared on
-    140,  # source id
-    100,  # last changed
-    280,  # change log
+    55,   # ציון
+    100,  # עיר
+    120,  # שכונה
+    200,  # כתובת (link)
+    90,   # מקור (link)
+    80,   # סוג מוכר
+    55,   # גיל (days)
+    70,   # סוג
+    320,  # תיאור
+    220,  # הערות
+    55,   # חדרים
+    50,   # יחידות דיור
+    65,   # מגרש
+    65,   # מ"ר בנוי
+    65,   # גינה
+    55,   # קומה
+    100,  # מחיר
+    80,   # ₪/מ"ר
+    100,  # מחיר קודם
+    100,  # נצפה לאחרונה
+    220,  # פירוט ניקוד
+    100,  # תאריך היעלמות
+    140,  # מזהה מקור
+    100,  # שינוי אחרון
+    280,  # יומן שינויים
     40,   # sync shadow (hidden)
 ]
 
@@ -156,12 +151,12 @@ PRICE_COLUMNS = ("price", "price_per_sqm_eff", "price_before")
 
 # Integer columns — display as bare integers, no decimal point.
 INTEGER_COLUMNS = (
-    "sqm_eff",
     "sqm_build_eff",
     "lot_sqm_eff",
     "garden_sqm_eff",
     "floor",
     "units_count_eff",
+    "age_days",
 )
 
 # Float columns — always show one decimal (e.g. Score 7.5).
@@ -189,7 +184,6 @@ DATA_COLUMNS_FOR_DIFF = [
     "neighborhood",
     "address",
     "rooms_eff",
-    "sqm_eff",
     "sqm_build_eff",
     "lot_sqm_eff",
     "garden_sqm_eff",
@@ -263,6 +257,19 @@ def _to_cell_str(v: Any) -> str:
     return str(c)
 
 
+def _age_days(first_listed_date: str | None, today: datetime | None = None) -> int | None:
+    """Days between today and `first_listed_date` (YYYY-MM-DD). None if missing/bad."""
+    s = (first_listed_date or "").strip()[:10]
+    if not s:
+        return None
+    try:
+        dt = datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    ref = today or datetime.now(timezone.utc)
+    return max(0, (ref.date() - dt.date()).days)
+
+
 def _normalize_description(s: str | None) -> str:
     """Collapse newlines + repeated whitespace so the description always fits on
     one row in the sheet."""
@@ -293,12 +300,13 @@ def _merge_address(street: str, house: str) -> str:
     return f"{street} {house}"
 
 
-def _build_data_dict(listing: dict[str, Any]) -> dict[str, Any]:
+def _build_data_dict(listing: dict[str, Any], *, today: datetime | None = None) -> dict[str, Any]:
     """Return per-column raw value map for one listing (pre-coercion).
 
     `comments` defaults to empty; user fills it in directly in the sheet and
     the merge logic preserves the edit across cycles.
     """
+    first_listed = (listing.get("first_listed_date") or "")[:10]
     return {
         "score": listing.get("score"),
         "source": listing.get("source", ""),
@@ -306,8 +314,8 @@ def _build_data_dict(listing: dict[str, Any]) -> dict[str, Any]:
         "city": listing.get("city", ""),
         "neighborhood": listing.get("neighborhood", ""),
         "address": _merge_address(listing.get("street", ""), listing.get("house_number", "")),
+        "age_days": _age_days(first_listed, today=today),
         "rooms_eff": effective_rooms(listing),
-        "sqm_eff": effective_sqm(listing),
         "sqm_build_eff": effective_sqm_build(listing),
         "lot_sqm_eff": effective_lot_sqm(listing),
         "garden_sqm_eff": effective_garden_sqm(listing),
@@ -316,13 +324,15 @@ def _build_data_dict(listing: dict[str, Any]) -> dict[str, Any]:
         "price_before": listing.get("price_before"),
         "listing_type": listing.get("listing_type", ""),
         "units_count_eff": effective_units(listing),
-        "first_listed_date": (listing.get("first_listed_date") or "")[:10],
+        "first_listed_date": first_listed,         # used internally (sort) — not a sheet column
         "comments": "",
         "description": _normalize_description(listing.get("description", "")),
         "last_seen_at": (str(listing.get("last_seen_at") or ""))[:10],
         "why_score": _score_reasons_summary(listing),
         "url": listing.get("url", ""),
         "source_id": listing.get("source_id", ""),
+        "lat": listing.get("lat"),                # used internally (street view) — not a column
+        "lon": listing.get("lon"),
     }
 
 
@@ -346,12 +356,14 @@ def _row_from_data(
                 out.append(f'=HYPERLINK("{safe_url}", "{safe_src}")')
             else:
                 out.append(src)
+        elif col == "address":
+            out.append(_address_cell(data))
         elif col == "price_per_sqm_eff":
-            # Live formula: Price ÷ SQM, blank if SQM is missing/zero.
-            # Stays correct if user edits Price or SQM directly in the sheet.
+            # Live formula: Price ÷ Built m², blank if denominator missing/zero.
+            # Stays correct if the user edits Price or Built m² directly.
             if sheet_row > 0:
                 price_letter = _index_to_letter(SHEET_COLUMNS.index("price"))
-                sqm_letter = _index_to_letter(SHEET_COLUMNS.index("sqm_eff"))
+                sqm_letter = _index_to_letter(SHEET_COLUMNS.index("sqm_build_eff"))
                 out.append(
                     f'=IFERROR(ROUND({price_letter}{sheet_row}/{sqm_letter}{sheet_row}), "")'
                 )
@@ -368,6 +380,33 @@ def _row_from_data(
         else:
             out.append(_coerce_cell(data.get(col)))
     return out
+
+
+def _street_view_url(data: dict[str, Any]) -> str:
+    """Build a Street-View pano URL if we have lat/lon, else a Google Maps
+    search URL based on city + address text."""
+    from urllib.parse import quote
+    lat = data.get("lat")
+    lon = data.get("lon")
+    if lat is not None and lon is not None:
+        return (
+            "https://www.google.com/maps/@?api=1&map_action=pano"
+            f"&viewpoint={lat},{lon}"
+        )
+    addr = data.get("address") or ""
+    city = data.get("city") or ""
+    query = ", ".join(p for p in (addr, city, "ישראל") if p)
+    return f"https://www.google.com/maps/search/?api=1&query={quote(query)}"
+
+
+def _address_cell(data: dict[str, Any]) -> str:
+    addr = data.get("address") or ""
+    if not addr:
+        return ""
+    url = _street_view_url(data)
+    safe_url = url.replace('"', '%22')
+    safe_addr = str(addr).replace('"', '\\"')
+    return f'=HYPERLINK("{safe_url}", "{safe_addr}")'
 
 
 def _diff(prior: dict[str, str], fresh: dict[str, Any]) -> dict[str, list]:
@@ -576,7 +615,7 @@ def _build_rows(
             # Fallback: fixed wall-clock cutoff.
             is_active = last_seen is not None and last_seen.timestamp() >= cutoff_ts
 
-        fresh_data = _build_data_dict(listing)
+        fresh_data = _build_data_dict(listing, today=now)
         merged, new_shadow = _merge_user_edits(prior, shadow, fresh_data)
 
         # Brand-new row: record an initial snapshot diff.
@@ -797,14 +836,15 @@ def _write_block(ws, sh, rows_out: list[list[Any]], disappeared_rows: list[int])
         }
     })
 
-    # Freeze + header notes (legend on hover)
+    # Freeze header + set sheet direction to RTL
     requests.append({
         "updateSheetProperties": {
             "properties": {
                 "sheetId": sheet_meta_id,
                 "gridProperties": {"frozenRowCount": 1},
+                "rightToLeft": True,
             },
-            "fields": "gridProperties.frozenRowCount",
+            "fields": "gridProperties.frozenRowCount,rightToLeft",
         }
     })
     for col_idx, legend_text in enumerate(SHEET_LEGEND):
