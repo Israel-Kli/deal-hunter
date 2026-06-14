@@ -19,9 +19,12 @@ from datetime import datetime, timezone
 from typing import Any
 
 from deal_hunter.effective import (
+    effective_garden_sqm,
+    effective_lot_sqm,
     effective_price_per_sqm,
     effective_rooms,
     effective_sqm,
+    effective_sqm_build,
     effective_units,
 )
 
@@ -38,10 +41,12 @@ SHEET_COLUMNS = [
     "house_number",
     "rooms_eff",
     "sqm_eff",
+    "sqm_build_eff",
+    "lot_sqm_eff",
+    "garden_sqm_eff",
     "floor",
     "price",
     "price_per_sqm_eff",
-    "fair_price_estimate",
     "price_before",
     "features",
     "listing_type",
@@ -65,10 +70,12 @@ SHEET_HEADERS = [
     "House #",
     "Rooms",
     "SQM",
+    "Built m²",
+    "Lot m²",
+    "Garden m²",
     "Floor",
     "Price",
     "₪/m²",
-    "Fair Price",
     "Prev Price",
     "Features",
     "Type",
@@ -91,11 +98,13 @@ SHEET_LEGEND = [
     "Street",
     "House number",
     "Effective room count (user override or extracted)",
-    "Effective floor area, m²",
+    "Effective interior floor area, m²",
+    "Effective built area, m² (מ\"ר בנוי) — includes walls / balconies / service areas",
+    "Effective plot / lot size, m² (מגרש)",
+    "Effective garden area, m² (גינה)",
     "Floor number",
     "Asking price, ₪",
     "Effective price per m² — gradient green→red (lower is better)",
-    "Comp-based fair-price estimate (₪); blank if comps unavailable",
     "Previous asking price, ₪ (if dropped)",
     "Compact features: P=parking, B=balcony, R=renovated, A=AC, M=mamad, E=elevator",
     "Private vs agent",
@@ -112,17 +121,19 @@ SHEET_LEGEND = [
 
 SHEET_COL_WIDTHS = [
     55,   # score
-    90,   # source (now hyperlink → slightly wider)
+    90,   # source (hyperlink)
     100,  # city
     120,  # neighborhood
     140,  # street
     55,   # house #
     55,   # rooms
     55,   # sqm
+    65,   # built m²
+    65,   # lot m²
+    65,   # garden m²
     55,   # floor
     100,  # price
     80,   # ₪/m²
-    100,  # fair price
     100,  # prev price
     100,  # features
     70,   # listing_type
@@ -138,7 +149,7 @@ SHEET_COL_WIDTHS = [
 ]
 
 # Columns formatted as numbers with thousands separators.
-PRICE_COLUMNS = ("price", "price_per_sqm_eff", "fair_price_estimate", "price_before")
+PRICE_COLUMNS = ("price", "price_per_sqm_eff", "price_before")
 
 # Columns whose values participate in the Change Log diff. Identity,
 # rolling dates, and audit columns are excluded.
@@ -150,10 +161,12 @@ DATA_COLUMNS_FOR_DIFF = [
     "house_number",
     "rooms_eff",
     "sqm_eff",
+    "sqm_build_eff",
+    "lot_sqm_eff",
+    "garden_sqm_eff",
     "floor",
     "price",
     "price_per_sqm_eff",
-    "fair_price_estimate",
     "price_before",
     "features",
     "listing_type",
@@ -252,10 +265,12 @@ def _build_data_dict(listing: dict[str, Any]) -> dict[str, Any]:
         "house_number": listing.get("house_number", ""),
         "rooms_eff": effective_rooms(listing),
         "sqm_eff": effective_sqm(listing),
+        "sqm_build_eff": effective_sqm_build(listing),
+        "lot_sqm_eff": effective_lot_sqm(listing),
+        "garden_sqm_eff": effective_garden_sqm(listing),
         "floor": listing.get("floor"),
         "price": listing.get("price"),
         "price_per_sqm_eff": effective_price_per_sqm(listing),
-        "fair_price_estimate": listing.get("fair_price_estimate"),
         "price_before": listing.get("price_before"),
         "features": _features_summary(listing),
         "listing_type": listing.get("listing_type", ""),
