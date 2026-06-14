@@ -74,6 +74,22 @@ def test_build_rows_columns_match_schema():
     assert len(rows[0]) == len(gs.SHEET_COLUMNS)
 
 
+def test_source_cell_is_hyperlink_to_listing_url():
+    rows, _ = gs._build_rows(
+        [_listing()], {}, cutoff_minutes=120, audit_max=20,
+        today=FIXED_TODAY, now=FIXED_NOW,
+    )
+    src_cell = rows[0][gs.SHEET_COLUMNS.index("source")]
+    assert src_cell.startswith("=HYPERLINK(")
+    assert "https://www.yad2.co.il/item/abc123" in src_cell
+    assert '"yad2"' in src_cell
+
+
+def test_no_link_column():
+    assert "url" not in gs.SHEET_COLUMNS
+    assert "Link" not in gs.SHEET_HEADERS
+
+
 def test_new_listing_gets_today_in_last_changed():
     rows, disappeared = gs._build_rows(
         [_listing()], {}, cutoff_minutes=120, audit_max=20,
@@ -268,13 +284,24 @@ def test_missing_source_id_skipped():
 # ---- helpers --------------------------------------------------------------
 
 
+_HYPERLINK_DISPLAY_RE = __import__("re").compile(
+    r'^=HYPERLINK\("[^"]*",\s*"([^"]*)"\)$'
+)
+
+
+def _display(v):
+    """Mimic gspread's get_all_values: return cell display text, not formulas."""
+    s = "" if v is None else str(v)
+    m = _HYPERLINK_DISPLAY_RE.match(s)
+    return m.group(1) if m else s
+
+
 def _row_to_strings(row):
-    """Convert a typed row list back to the dict shape `_read_existing` would
-    return — strings keyed by SHEET_COLUMNS."""
+    """Convert a typed row list back to the dict shape `_read_existing` returns."""
     out = {}
     for i, col in enumerate(gs.SHEET_COLUMNS):
         v = row[i] if i < len(row) else ""
-        out[col] = "" if v is None else str(v)
+        out[col] = _display(v)
     return out
 
 
@@ -289,9 +316,6 @@ def _make_existing_row(listing_dict, *, disappeared_on="", last_changed="", chan
             out[col] = last_changed
         elif col == "change_log":
             out[col] = change_log
-        elif col == "url":
-            url = data.get("url", "")
-            out[col] = f'view' if url else ""  # HYPERLINK display text
         else:
             v = gs._coerce_cell(data.get(col))
             out[col] = "" if v == "" else str(v)

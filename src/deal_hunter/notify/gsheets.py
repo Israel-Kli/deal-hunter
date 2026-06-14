@@ -50,7 +50,6 @@ SHEET_COLUMNS = [
     "first_listed_date",
     "last_seen_at",
     "why_score",
-    "url",
     "disappeared_on",
     "source_id",
     "last_changed",
@@ -78,7 +77,6 @@ SHEET_HEADERS = [
     "First Listed",
     "Last Seen",
     "Why Score",
-    "Link",
     "Disappeared On",
     "Source ID",
     "Last Changed",
@@ -87,7 +85,7 @@ SHEET_HEADERS = [
 
 SHEET_LEGEND = [
     "Heuristic 1–10 investment score",
-    "Scraper (yad2, onmap, ad, …)",
+    "Scraper (yad2, onmap, ad, …); click to open listing",
     "City",
     "Neighborhood",
     "Street",
@@ -96,7 +94,7 @@ SHEET_LEGEND = [
     "Effective floor area, m²",
     "Floor number",
     "Asking price, ₪",
-    "Effective price per m²",
+    "Effective price per m² — gradient green→red (lower is better)",
     "Comp-based fair-price estimate (₪); blank if comps unavailable",
     "Previous asking price, ₪ (if dropped)",
     "Compact features: P=parking, B=balcony, R=renovated, A=AC, M=mamad, E=elevator",
@@ -106,7 +104,6 @@ SHEET_LEGEND = [
     "Earliest publish/first-seen date",
     "Most recent crawl that observed the listing",
     "Concise summary derived from score_reasons",
-    "Hyperlink to source listing",
     "Date the listing stopped appearing in any source; row turns grey when set",
     "Per-source listing token; combined with Source forms the unique row key",
     "Most recent date any data field on this row differed from the previous cycle",
@@ -115,7 +112,7 @@ SHEET_LEGEND = [
 
 SHEET_COL_WIDTHS = [
     55,   # score
-    70,   # source
+    90,   # source (now hyperlink → slightly wider)
     100,  # city
     120,  # neighborhood
     140,  # street
@@ -123,10 +120,10 @@ SHEET_COL_WIDTHS = [
     55,   # rooms
     55,   # sqm
     55,   # floor
-    90,   # price
-    70,   # ₪/m²
-    90,   # fair price
-    90,   # prev price
+    100,  # price
+    80,   # ₪/m²
+    100,  # fair price
+    100,  # prev price
     100,  # features
     70,   # listing_type
     50,   # age
@@ -134,12 +131,14 @@ SHEET_COL_WIDTHS = [
     100,  # first listed
     100,  # last seen
     220,  # why score
-    180,  # link
     100,  # disappeared on
     140,  # source id
     100,  # last changed
     280,  # change log
 ]
+
+# Columns formatted as numbers with thousands separators.
+PRICE_COLUMNS = ("price", "price_per_sqm_eff", "fair_price_estimate", "price_before")
 
 # Columns whose values participate in the Change Log diff. Identity,
 # rolling dates, and audit columns are excluded.
@@ -162,7 +161,7 @@ DATA_COLUMNS_FOR_DIFF = [
     "units_count_eff",
 ]
 
-LEGEND_ROWS = 3  # row 1 = headers, row 2 = legend, row 3 = blank
+LEGEND_ROWS = 1  # only row 1 (headers). Legend is attached as cell notes.
 
 
 # ---- helpers ----------------------------------------------------------------
@@ -279,9 +278,15 @@ def _row_from_data(
 ) -> list[Any]:
     out: list[Any] = []
     for col in SHEET_COLUMNS:
-        if col == "url":
+        if col == "source":
+            src = data.get("source", "")
             url = data.get("url", "")
-            out.append(f'=HYPERLINK("{url}", "view")' if url else "")
+            if src and url:
+                safe_url = url.replace('"', '%22')
+                safe_src = str(src).replace('"', '\\"')
+                out.append(f'=HYPERLINK("{safe_url}", "{safe_src}")')
+            else:
+                out.append(src)
         elif col == "disappeared_on":
             out.append(disappeared_on)
         elif col == "last_changed":
@@ -534,6 +539,9 @@ def sync(
 def _write_block(ws, sh, rows_out: list[list[Any]], disappeared_rows: list[int]) -> bool:
     n_cols = len(SHEET_COLUMNS)
     last_col_letter = _index_to_letter(n_cols - 1)
+    sheet_meta_id = ws.id
+    data_start = LEGEND_ROWS + 1  # row 2 (1-indexed)
+    data_end = LEGEND_ROWS + len(rows_out)  # last data row (1-indexed)
 
     # Resize if needed
     try:
@@ -545,21 +553,20 @@ def _write_block(ws, sh, rows_out: list[list[Any]], disappeared_rows: list[int])
     except Exception as e:
         log.debug("gsheets: resize skipped: %s", e)
 
-    # Header + legend + blank
+    # Header row only
     try:
         ws.update(
-            range_name=f"A1:{last_col_letter}{LEGEND_ROWS}",
-            values=[SHEET_HEADERS, SHEET_LEGEND, [""] * n_cols],
+            range_name=f"A1:{last_col_letter}1",
+            values=[SHEET_HEADERS],
             value_input_option="USER_ENTERED",
         )
     except Exception as e:
-        log.warning("gsheets: failed to write header block: %s", e)
+        log.warning("gsheets: failed to write header: %s", e)
 
-    data_start = LEGEND_ROWS + 1
     if rows_out:
         try:
             ws.update(
-                range_name=f"A{data_start}:{last_col_letter}{data_start + len(rows_out) - 1}",
+                range_name=f"A{data_start}:{last_col_letter}{data_end}",
                 values=rows_out,
                 value_input_option="USER_ENTERED",
             )
@@ -570,7 +577,7 @@ def _write_block(ws, sh, rows_out: list[list[Any]], disappeared_rows: list[int])
     # Clear any stale rows below our new data range
     try:
         max_existing = ws.row_count
-        first_empty = data_start + len(rows_out)
+        first_empty = data_end + 1
         if max_existing >= first_empty:
             tail_rows = max_existing - first_empty + 1
             if tail_rows > 0:
@@ -583,111 +590,145 @@ def _write_block(ws, sh, rows_out: list[list[Any]], disappeared_rows: list[int])
     except Exception as e:
         log.debug("gsheets: tail clear skipped: %s", e)
 
-    # Formatting
+    # Best-effort delete existing conditional format rules so we don't stack.
+    for _ in range(50):
+        try:
+            sh.batch_update({
+                "requests": [
+                    {"deleteConditionalFormatRule": {"sheetId": sheet_meta_id, "index": 0}}
+                ]
+            })
+        except Exception:
+            break
+
+    # Build the single big formatting batch.
+    requests: list[dict] = []
+
+    # Bold header row
+    requests.append({
+        "repeatCell": {
+            "range": {"sheetId": sheet_meta_id, "startRowIndex": 0, "endRowIndex": 1,
+                      "startColumnIndex": 0, "endColumnIndex": n_cols},
+            "cell": {"userEnteredFormat": {"textFormat": {"bold": True}}},
+            "fields": "userEnteredFormat.textFormat.bold",
+        }
+    })
+
+    # Freeze + header notes (legend on hover)
+    requests.append({
+        "updateSheetProperties": {
+            "properties": {
+                "sheetId": sheet_meta_id,
+                "gridProperties": {"frozenRowCount": 1},
+            },
+            "fields": "gridProperties.frozenRowCount",
+        }
+    })
+    for col_idx, legend_text in enumerate(SHEET_LEGEND):
+        requests.append({
+            "updateCells": {
+                "range": {"sheetId": sheet_meta_id, "startRowIndex": 0, "endRowIndex": 1,
+                          "startColumnIndex": col_idx, "endColumnIndex": col_idx + 1},
+                "rows": [{"values": [{"note": legend_text}]}],
+                "fields": "note",
+            }
+        })
+
+    # Number formatting on price columns
+    if rows_out:
+        for col_name in PRICE_COLUMNS:
+            col_idx = SHEET_COLUMNS.index(col_name)
+            requests.append({
+                "repeatCell": {
+                    "range": {"sheetId": sheet_meta_id,
+                              "startRowIndex": LEGEND_ROWS, "endRowIndex": data_end,
+                              "startColumnIndex": col_idx, "endColumnIndex": col_idx + 1},
+                    "cell": {"userEnteredFormat": {
+                        "numberFormat": {"type": "NUMBER", "pattern": "#,##0"}}},
+                    "fields": "userEnteredFormat.numberFormat",
+                }
+            })
+
+    # Reset all data rows to white background first
+    if rows_out:
+        requests.append({
+            "repeatCell": {
+                "range": {"sheetId": sheet_meta_id,
+                          "startRowIndex": LEGEND_ROWS, "endRowIndex": data_end,
+                          "startColumnIndex": 0, "endColumnIndex": n_cols},
+                "cell": {"userEnteredFormat": {
+                    "backgroundColor": {"red": 1, "green": 1, "blue": 1}}},
+                "fields": "userEnteredFormat.backgroundColor",
+            }
+        })
+        # Grey out disappeared rows
+        for ridx in disappeared_rows:
+            abs_row = LEGEND_ROWS + ridx
+            requests.append({
+                "repeatCell": {
+                    "range": {"sheetId": sheet_meta_id,
+                              "startRowIndex": abs_row, "endRowIndex": abs_row + 1,
+                              "startColumnIndex": 0, "endColumnIndex": n_cols},
+                    "cell": {"userEnteredFormat": {
+                        "backgroundColor": {"red": 0.85, "green": 0.85, "blue": 0.85}}},
+                    "fields": "userEnteredFormat.backgroundColor",
+                }
+            })
+
+    # Gradient conditional formatting on ₪/m² (lower = green, higher = red)
+    if rows_out:
+        ppsqm_idx = SHEET_COLUMNS.index("price_per_sqm_eff")
+        requests.append({
+            "addConditionalFormatRule": {
+                "rule": {
+                    "ranges": [{
+                        "sheetId": sheet_meta_id,
+                        "startRowIndex": LEGEND_ROWS, "endRowIndex": data_end,
+                        "startColumnIndex": ppsqm_idx, "endColumnIndex": ppsqm_idx + 1,
+                    }],
+                    "gradientRule": {
+                        "minpoint": {"color": {"red": 0.34, "green": 0.78, "blue": 0.4},
+                                     "type": "MIN"},
+                        "midpoint": {"color": {"red": 1.0, "green": 0.92, "blue": 0.4},
+                                     "type": "PERCENTILE", "value": "50"},
+                        "maxpoint": {"color": {"red": 0.94, "green": 0.5, "blue": 0.5},
+                                     "type": "MAX"},
+                    },
+                },
+                "index": 0,
+            }
+        })
+
+    # Column widths
+    for col_idx, px in enumerate(SHEET_COL_WIDTHS):
+        requests.append({
+            "updateDimensionProperties": {
+                "range": {"sheetId": sheet_meta_id, "dimension": "COLUMNS",
+                          "startIndex": col_idx, "endIndex": col_idx + 1},
+                "properties": {"pixelSize": px},
+                "fields": "pixelSize",
+            }
+        })
+
+    # Basic filter on header + data range (replaces any existing filter)
+    requests.append({
+        "setBasicFilter": {
+            "filter": {
+                "range": {
+                    "sheetId": sheet_meta_id,
+                    "startRowIndex": 0,
+                    "endRowIndex": max(data_end, 1),
+                    "startColumnIndex": 0,
+                    "endColumnIndex": n_cols,
+                }
+            }
+        }
+    })
+
     try:
-        sheet_meta_id = ws.id
-        requests: list[dict] = [
-            {
-                "repeatCell": {
-                    "range": {
-                        "sheetId": sheet_meta_id,
-                        "startRowIndex": 0,
-                        "endRowIndex": 1,
-                        "startColumnIndex": 0,
-                        "endColumnIndex": n_cols,
-                    },
-                    "cell": {"userEnteredFormat": {"textFormat": {"bold": True}}},
-                    "fields": "userEnteredFormat.textFormat.bold",
-                }
-            },
-            {
-                "repeatCell": {
-                    "range": {
-                        "sheetId": sheet_meta_id,
-                        "startRowIndex": 1,
-                        "endRowIndex": 2,
-                        "startColumnIndex": 0,
-                        "endColumnIndex": n_cols,
-                    },
-                    "cell": {
-                        "userEnteredFormat": {
-                            "textFormat": {
-                                "italic": True,
-                                "foregroundColor": {
-                                    "red": 0.4,
-                                    "green": 0.4,
-                                    "blue": 0.4,
-                                },
-                            }
-                        }
-                    },
-                    "fields": "userEnteredFormat.textFormat",
-                }
-            },
-        ]
-        if rows_out:
-            requests.append(
-                {
-                    "repeatCell": {
-                        "range": {
-                            "sheetId": sheet_meta_id,
-                            "startRowIndex": LEGEND_ROWS,
-                            "endRowIndex": LEGEND_ROWS + len(rows_out),
-                            "startColumnIndex": 0,
-                            "endColumnIndex": n_cols,
-                        },
-                        "cell": {
-                            "userEnteredFormat": {
-                                "backgroundColor": {"red": 1, "green": 1, "blue": 1}
-                            }
-                        },
-                        "fields": "userEnteredFormat.backgroundColor",
-                    }
-                }
-            )
-            for ridx in disappeared_rows:
-                abs_row = LEGEND_ROWS + ridx
-                requests.append(
-                    {
-                        "repeatCell": {
-                            "range": {
-                                "sheetId": sheet_meta_id,
-                                "startRowIndex": abs_row,
-                                "endRowIndex": abs_row + 1,
-                                "startColumnIndex": 0,
-                                "endColumnIndex": n_cols,
-                            },
-                            "cell": {
-                                "userEnteredFormat": {
-                                    "backgroundColor": {
-                                        "red": 0.85,
-                                        "green": 0.85,
-                                        "blue": 0.85,
-                                    }
-                                }
-                            },
-                            "fields": "userEnteredFormat.backgroundColor",
-                        }
-                    }
-                )
-        for col_idx, px in enumerate(SHEET_COL_WIDTHS):
-            requests.append(
-                {
-                    "updateDimensionProperties": {
-                        "range": {
-                            "sheetId": sheet_meta_id,
-                            "dimension": "COLUMNS",
-                            "startIndex": col_idx,
-                            "endIndex": col_idx + 1,
-                        },
-                        "properties": {"pixelSize": px},
-                        "fields": "pixelSize",
-                    }
-                }
-            )
         sh.batch_update({"requests": requests})
     except Exception as e:
-        log.debug("gsheets: formatting batch failed: %s", e)
+        log.warning("gsheets: formatting batch failed: %s", e)
 
     log.info(
         "gsheets sync: wrote %d rows (%d disappeared)",
