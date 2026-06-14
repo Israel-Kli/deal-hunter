@@ -35,12 +35,9 @@ SHEET_COLUMNS = [
     "score",
     "source",
     "sale_type",
-    "phone",
-    "comments",
     "city",
     "neighborhood",
-    "street",
-    "house_number",
+    "address",
     "rooms_eff",
     "sqm_eff",
     "sqm_build_eff",
@@ -53,6 +50,8 @@ SHEET_COLUMNS = [
     "listing_type",
     "units_count_eff",
     "first_listed_date",
+    "comments",
+    "description",
     "last_seen_at",
     "why_score",
     "disappeared_on",
@@ -66,12 +65,9 @@ SHEET_HEADERS = [
     "Score",
     "Source",
     "Sale Type",
-    "Phone",
-    "Comments",
     "City",
     "Neighborhood",
-    "Street",
-    "House #",
+    "Address",
     "Rooms",
     "SQM",
     "Built m²",
@@ -84,6 +80,8 @@ SHEET_HEADERS = [
     "Type",
     "Units",
     "First Listed",
+    "Comments",
+    "Description",
     "Last Seen",
     "Why Score",
     "Disappeared On",
@@ -97,12 +95,9 @@ SHEET_LEGEND = [
     "Heuristic 1–10 investment score",
     "Scraper (yad2, onmap, ad, …); click to open listing",
     "Agent vs Direct sale — Agent rows highlighted light red. Editable.",
-    "Manual: contact phone number — fill in and edits are preserved across syncs",
-    "Manual: free-form notes — preserved across syncs",
     "City",
     "Neighborhood",
-    "Street",
-    "House number",
+    "Street + house number combined",
     "Effective room count (user override or extracted)",
     "Effective interior floor area, m²",
     "Effective built area, m² (מ\"ר בנוי) — includes walls / balconies / service areas",
@@ -115,6 +110,8 @@ SHEET_LEGEND = [
     "Property type (apartment / house / cottage / …)",
     "יחידות דיור count if extracted",
     "Earliest publish/first-seen date",
+    "Manual: free-form notes — preserved across syncs",
+    "Free-text description scraped from the listing",
     "Most recent crawl that observed the listing",
     "Concise summary derived from score_reasons",
     "Date the listing stopped appearing in any source; row turns grey when set",
@@ -128,12 +125,9 @@ SHEET_COL_WIDTHS = [
     55,   # score
     90,   # source (hyperlink)
     80,   # sale type
-    120,  # phone
-    220,  # comments
     100,  # city
     120,  # neighborhood
-    140,  # street
-    55,   # house #
+    180,  # address
     55,   # rooms
     55,   # sqm
     65,   # built m²
@@ -146,6 +140,8 @@ SHEET_COL_WIDTHS = [
     70,   # type
     50,   # units
     100,  # first listed
+    220,  # comments
+    320,  # description
     100,  # last seen
     220,  # why score
     100,  # disappeared on
@@ -188,12 +184,11 @@ DATE_COLUMNS = (
 DATA_COLUMNS_FOR_DIFF = [
     "score",
     "sale_type",
-    "phone",
     "comments",
+    "description",
     "city",
     "neighborhood",
-    "street",
-    "house_number",
+    "address",
     "rooms_eff",
     "sqm_eff",
     "sqm_build_eff",
@@ -269,21 +264,38 @@ def _to_cell_str(v: Any) -> str:
     return str(c)
 
 
+def _merge_address(street: str, house: str) -> str:
+    """Combine street + house_number into a single Address field.
+
+    If the street already ends with the house number, keep it as-is.
+    Otherwise append ' <house>'. Empty inputs degrade gracefully.
+    """
+    street = (street or "").strip()
+    house = str(house or "").strip()
+    if not street and not house:
+        return ""
+    if not house:
+        return street
+    if not street:
+        return house
+    if street.endswith(house):
+        return street
+    return f"{street} {house}"
+
+
 def _build_data_dict(listing: dict[str, Any]) -> dict[str, Any]:
     """Return per-column raw value map for one listing (pre-coercion).
-    `phone` and `comments` default to empty; user fills them in directly in the
-    sheet and the merge logic preserves them across cycles.
+
+    `comments` defaults to empty; user fills it in directly in the sheet and
+    the merge logic preserves the edit across cycles.
     """
     return {
         "score": listing.get("score"),
         "source": listing.get("source", ""),
         "sale_type": "Agent" if listing.get("is_agent") else "Direct",
-        "phone": "",
-        "comments": "",
         "city": listing.get("city", ""),
         "neighborhood": listing.get("neighborhood", ""),
-        "street": listing.get("street", ""),
-        "house_number": listing.get("house_number", ""),
+        "address": _merge_address(listing.get("street", ""), listing.get("house_number", "")),
         "rooms_eff": effective_rooms(listing),
         "sqm_eff": effective_sqm(listing),
         "sqm_build_eff": effective_sqm_build(listing),
@@ -295,6 +307,8 @@ def _build_data_dict(listing: dict[str, Any]) -> dict[str, Any]:
         "listing_type": listing.get("listing_type", ""),
         "units_count_eff": effective_units(listing),
         "first_listed_date": (listing.get("first_listed_date") or "")[:10],
+        "comments": "",
+        "description": listing.get("description", "") or "",
         "last_seen_at": (str(listing.get("last_seen_at") or ""))[:10],
         "why_score": _score_reasons_summary(listing),
         "url": listing.get("url", ""),
@@ -893,6 +907,21 @@ def _write_block(ws, sh, rows_out: list[list[Any]], disappeared_rows: list[int])
                 "index": 1,
             }
         })
+
+    # Wrap text for long-content columns (Comments, Description)
+    if rows_out:
+        for col_name in ("comments", "description"):
+            col_idx = SHEET_COLUMNS.index(col_name)
+            requests.append({
+                "repeatCell": {
+                    "range": {"sheetId": sheet_meta_id,
+                              "startRowIndex": LEGEND_ROWS, "endRowIndex": data_end,
+                              "startColumnIndex": col_idx, "endColumnIndex": col_idx + 1},
+                    "cell": {"userEnteredFormat": {"wrapStrategy": "WRAP",
+                                                    "verticalAlignment": "TOP"}},
+                    "fields": "userEnteredFormat.wrapStrategy,userEnteredFormat.verticalAlignment",
+                }
+            })
 
     # Column widths
     for col_idx, px in enumerate(SHEET_COL_WIDTHS):

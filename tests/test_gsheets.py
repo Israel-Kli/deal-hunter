@@ -112,27 +112,29 @@ def test_price_per_sqm_is_a_formula():
     assert "ROUND(" in ppsqm_cell
 
 
-def test_phone_and_comments_columns_exist():
-    assert "phone" in gs.SHEET_COLUMNS
+def test_comments_column_exists_phone_does_not():
     assert "comments" in gs.SHEET_COLUMNS
-    assert "Phone" in gs.SHEET_HEADERS
     assert "Comments" in gs.SHEET_HEADERS
+    assert "phone" not in gs.SHEET_COLUMNS
+    assert "Phone" not in gs.SHEET_HEADERS
 
 
-def test_phone_and_comments_default_empty_and_preserved():
-    """Phone/Comments start empty; user fills them; next cycle keeps the value."""
+def test_comments_positioned_after_first_listed():
+    fl_idx = gs.SHEET_COLUMNS.index("first_listed_date")
+    cm_idx = gs.SHEET_COLUMNS.index("comments")
+    assert cm_idx == fl_idx + 1
+
+
+def test_comments_default_empty_and_preserved():
+    """Comments start empty; user fills it; next cycle keeps the value."""
     rows1, _ = gs._build_rows(
         [_listing()], {}, cutoff_minutes=120, audit_max=20,
         today=FIXED_TODAY, now=FIXED_NOW,
     )
-    phone_idx = gs.SHEET_COLUMNS.index("phone")
     comments_idx = gs.SHEET_COLUMNS.index("comments")
-    assert rows1[0][phone_idx] == ""
     assert rows1[0][comments_idx] == ""
 
-    # Simulate the user typing into Phone and Comments
     existing = _row_to_strings(rows1[0])
-    existing["phone"] = "+972-50-1234567"
     existing["comments"] = "Saw it Tuesday, great location"
     existing["sync_shadow"] = rows1[0][gs.SHEET_COLUMNS.index("sync_shadow")]
     existing_map = {("yad2", "abc123"): existing}
@@ -141,8 +143,42 @@ def test_phone_and_comments_default_empty_and_preserved():
         [_listing()], existing_map, cutoff_minutes=120, audit_max=20,
         today=FIXED_TODAY, now=FIXED_NOW,
     )
-    assert rows2[0][phone_idx] == "+972-50-1234567"
     assert rows2[0][comments_idx] == "Saw it Tuesday, great location"
+
+
+def test_address_merges_street_and_house():
+    """`Address` = street + house_number; if street already ends with house, keep."""
+    assert gs._merge_address("הדקל", "43") == "הדקל 43"
+    assert gs._merge_address("הדקל 43", "43") == "הדקל 43"
+    assert gs._merge_address("Main St", "") == "Main St"
+    assert gs._merge_address("", "12") == "12"
+    assert gs._merge_address("", "") == ""
+
+
+def test_no_street_or_house_columns():
+    assert "street" not in gs.SHEET_COLUMNS
+    assert "house_number" not in gs.SHEET_COLUMNS
+    assert "address" in gs.SHEET_COLUMNS
+
+
+def test_address_in_row():
+    rows, _ = gs._build_rows(
+        [_listing(street="הדקל", house_number="43")], {},
+        cutoff_minutes=120, audit_max=20,
+        today=FIXED_TODAY, now=FIXED_NOW,
+    )
+    addr = rows[0][gs.SHEET_COLUMNS.index("address")]
+    assert addr == "הדקל 43"
+
+
+def test_description_column_populated():
+    rows, _ = gs._build_rows(
+        [_listing(description="Spacious house with garden")], {},
+        cutoff_minutes=120, audit_max=20,
+        today=FIXED_TODAY, now=FIXED_NOW,
+    )
+    desc = rows[0][gs.SHEET_COLUMNS.index("description")]
+    assert desc == "Spacious house with garden"
 
 
 def test_per_source_scan_active_when_seen_with_latest_scan():
