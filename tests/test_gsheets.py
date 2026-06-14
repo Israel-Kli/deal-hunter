@@ -114,17 +114,14 @@ def test_price_per_sqm_is_a_formula():
 
 def test_comments_column_exists_phone_does_not():
     assert "comments" in gs.SHEET_COLUMNS
-    assert "Comments" in gs.SHEET_HEADERS
+    assert "הערות" in gs.SHEET_HEADERS
     assert "phone" not in gs.SHEET_COLUMNS
-    assert "Phone" not in gs.SHEET_HEADERS
 
 
-def test_description_then_comments_after_first_listed():
-    """Order: First Listed → Description → Comments."""
-    fl_idx = gs.SHEET_COLUMNS.index("first_listed_date")
+def test_description_then_comments():
+    """Order: Description → Comments."""
     desc_idx = gs.SHEET_COLUMNS.index("description")
     cm_idx = gs.SHEET_COLUMNS.index("comments")
-    assert desc_idx == fl_idx + 1
     assert cm_idx == desc_idx + 1
 
 
@@ -181,14 +178,45 @@ def test_no_street_or_house_columns():
     assert "address" in gs.SHEET_COLUMNS
 
 
-def test_address_in_row():
+def test_address_in_row_is_streetview_hyperlink():
     rows, _ = gs._build_rows(
         [_listing(street="הדקל", house_number="43")], {},
         cutoff_minutes=120, audit_max=20,
         today=FIXED_TODAY, now=FIXED_NOW,
     )
     addr = rows[0][gs.SHEET_COLUMNS.index("address")]
-    assert addr == "הדקל 43"
+    assert addr.startswith("=HYPERLINK(")
+    assert "google.com/maps" in addr
+    assert "הדקל 43" in addr  # display text
+
+
+def test_address_uses_streetview_pano_when_lat_lon():
+    rows, _ = gs._build_rows(
+        [_listing(street="הדקל", house_number="43", lat=32.105, lon=35.205)],
+        {}, cutoff_minutes=120, audit_max=20,
+        today=FIXED_TODAY, now=FIXED_NOW,
+    )
+    addr = rows[0][gs.SHEET_COLUMNS.index("address")]
+    assert "map_action=pano" in addr
+    assert "32.105,35.205" in addr
+
+
+def test_age_days_column_computed_from_first_listed():
+    """Ad age in days = today - first_listed_date."""
+    rows, _ = gs._build_rows(
+        [_listing(first_listed_date="2026-06-01")], {},
+        cutoff_minutes=120, audit_max=20,
+        today=FIXED_TODAY, now=FIXED_NOW,
+    )
+    age = rows[0][gs.SHEET_COLUMNS.index("age_days")]
+    assert age == (FIXED_NOW.date() - __import__("datetime").date(2026, 6, 1)).days
+
+
+def test_headers_are_in_hebrew():
+    """The visible headers should be the Hebrew terms from the dashboard."""
+    for hebrew in ("ציון", "עיר", "כתובת", "מקור", "גיל", "תיאור",
+                    "חדרים", "מגרש", "מ\"ר בנוי", "מחיר", "₪/מ\"ר"):
+        assert hebrew in gs.SHEET_HEADERS
 
 
 def test_description_column_populated():
@@ -286,21 +314,20 @@ def test_no_fair_price_column():
 
 
 def test_sqm_family_columns_present():
-    for col in ("sqm_eff", "sqm_build_eff", "lot_sqm_eff", "garden_sqm_eff"):
+    for col in ("sqm_build_eff", "lot_sqm_eff", "garden_sqm_eff"):
         assert col in gs.SHEET_COLUMNS
-    # Order: SQM → Built → Lot → Garden (right after SQM, before Floor)
-    idx = [gs.SHEET_COLUMNS.index(c) for c in ("sqm_eff", "sqm_build_eff", "lot_sqm_eff", "garden_sqm_eff", "floor")]
+    # Order in the sheet mirrors the dashboard: Lot → Built → Garden
+    idx = [gs.SHEET_COLUMNS.index(c) for c in ("lot_sqm_eff", "sqm_build_eff", "garden_sqm_eff")]
     assert idx == sorted(idx), f"expected sqm family in order, got indexes {idx}"
 
 
 def test_sqm_family_values_in_row():
-    l = _listing(sqm=120, sqm_build=140, lot_sqm=300, garden_sqm=50)
+    l = _listing(sqm_build=140, lot_sqm=300, garden_sqm=50)
     rows, _ = gs._build_rows(
         [l], {}, cutoff_minutes=120, audit_max=20,
         today=FIXED_TODAY, now=FIXED_NOW,
     )
     row = rows[0]
-    assert row[gs.SHEET_COLUMNS.index("sqm_eff")] == 120
     assert row[gs.SHEET_COLUMNS.index("sqm_build_eff")] == 140
     assert row[gs.SHEET_COLUMNS.index("lot_sqm_eff")] == 300
     assert row[gs.SHEET_COLUMNS.index("garden_sqm_eff")] == 50
