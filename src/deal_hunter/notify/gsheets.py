@@ -50,8 +50,8 @@ SHEET_COLUMNS = [
     "listing_type",
     "units_count_eff",
     "first_listed_date",
-    "comments",
     "description",
+    "comments",
     "last_seen_at",
     "why_score",
     "disappeared_on",
@@ -80,8 +80,8 @@ SHEET_HEADERS = [
     "Type",
     "Units",
     "First Listed",
-    "Comments",
     "Description",
+    "Comments",
     "Last Seen",
     "Why Score",
     "Disappeared On",
@@ -110,8 +110,8 @@ SHEET_LEGEND = [
     "Property type (apartment / house / cottage / …)",
     "יחידות דיור count if extracted",
     "Earliest publish/first-seen date",
+    "Free-text description scraped from the listing (single-line, clipped — click to expand)",
     "Manual: free-form notes — preserved across syncs",
-    "Free-text description scraped from the listing",
     "Most recent crawl that observed the listing",
     "Concise summary derived from score_reasons",
     "Date the listing stopped appearing in any source; row turns grey when set",
@@ -140,8 +140,8 @@ SHEET_COL_WIDTHS = [
     70,   # type
     50,   # units
     100,  # first listed
-    220,  # comments
     320,  # description
+    220,  # comments
     100,  # last seen
     220,  # why score
     100,  # disappeared on
@@ -263,6 +263,17 @@ def _to_cell_str(v: Any) -> str:
     return str(c)
 
 
+def _normalize_description(s: str | None) -> str:
+    """Collapse newlines + repeated whitespace so the description always fits on
+    one row in the sheet."""
+    if not s:
+        return ""
+    out = str(s).replace("\r", " ").replace("\n", " ")
+    while "  " in out:
+        out = out.replace("  ", " ")
+    return out.strip()
+
+
 def _merge_address(street: str, house: str) -> str:
     """Combine street + house_number into a single Address field.
 
@@ -307,7 +318,7 @@ def _build_data_dict(listing: dict[str, Any]) -> dict[str, Any]:
         "units_count_eff": effective_units(listing),
         "first_listed_date": (listing.get("first_listed_date") or "")[:10],
         "comments": "",
-        "description": listing.get("description", "") or "",
+        "description": _normalize_description(listing.get("description", "")),
         "last_seen_at": (str(listing.get("last_seen_at") or ""))[:10],
         "why_score": _score_reasons_summary(listing),
         "url": listing.get("url", ""),
@@ -907,20 +918,33 @@ def _write_block(ws, sh, rows_out: list[list[Any]], disappeared_rows: list[int])
             }
         })
 
-    # Wrap text for long-content columns (Comments, Description)
+    # Clip long-content columns (Description, Comments) — overflow is hidden so
+    # rows stay at a uniform single-row height.
     if rows_out:
-        for col_name in ("comments", "description"):
+        for col_name in ("description", "comments"):
             col_idx = SHEET_COLUMNS.index(col_name)
             requests.append({
                 "repeatCell": {
                     "range": {"sheetId": sheet_meta_id,
                               "startRowIndex": LEGEND_ROWS, "endRowIndex": data_end,
                               "startColumnIndex": col_idx, "endColumnIndex": col_idx + 1},
-                    "cell": {"userEnteredFormat": {"wrapStrategy": "WRAP",
-                                                    "verticalAlignment": "TOP"}},
+                    "cell": {"userEnteredFormat": {"wrapStrategy": "CLIP",
+                                                    "verticalAlignment": "MIDDLE"}},
                     "fields": "userEnteredFormat.wrapStrategy,userEnteredFormat.verticalAlignment",
                 }
             })
+
+    # Force all data rows to a single-row height (default 21px). This undoes any
+    # previous auto-resize that grew rows to fit wrapped content.
+    if rows_out:
+        requests.append({
+            "updateDimensionProperties": {
+                "range": {"sheetId": sheet_meta_id, "dimension": "ROWS",
+                          "startIndex": LEGEND_ROWS, "endIndex": data_end},
+                "properties": {"pixelSize": 21},
+                "fields": "pixelSize",
+            }
+        })
 
     # Column widths
     for col_idx, px in enumerate(SHEET_COL_WIDTHS):

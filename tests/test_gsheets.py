@@ -119,10 +119,30 @@ def test_comments_column_exists_phone_does_not():
     assert "Phone" not in gs.SHEET_HEADERS
 
 
-def test_comments_positioned_after_first_listed():
+def test_description_then_comments_after_first_listed():
+    """Order: First Listed → Description → Comments."""
     fl_idx = gs.SHEET_COLUMNS.index("first_listed_date")
+    desc_idx = gs.SHEET_COLUMNS.index("description")
     cm_idx = gs.SHEET_COLUMNS.index("comments")
-    assert cm_idx == fl_idx + 1
+    assert desc_idx == fl_idx + 1
+    assert cm_idx == desc_idx + 1
+
+
+def test_description_newlines_stripped():
+    rows, _ = gs._build_rows(
+        [_listing(description="line one\nline two\r\nline three")], {},
+        cutoff_minutes=120, audit_max=20,
+        today=FIXED_TODAY, now=FIXED_NOW,
+    )
+    desc = rows[0][gs.SHEET_COLUMNS.index("description")]
+    assert "\n" not in desc and "\r" not in desc
+    assert desc == "line one line two line three"
+
+
+def test_description_collapses_repeated_whitespace():
+    assert gs._normalize_description("a  b   c\n\n d") == "a b c d"
+    assert gs._normalize_description("") == ""
+    assert gs._normalize_description(None) == ""
 
 
 def test_comments_default_empty_and_preserved():
