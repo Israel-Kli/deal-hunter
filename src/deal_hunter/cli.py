@@ -182,6 +182,7 @@ def _scan_adapter(
                 listing.score_reasons = reasons
                 is_new, prev_price = repo.upsert(listing)
                 result.fetched += 1
+                alertable = listing.floor is None or listing.floor <= 1
                 if is_new:
                     result.new += 1
                 else:
@@ -190,8 +191,9 @@ def _scan_adapter(
                         drop_pct = (prev_price - listing.price) / prev_price * 100
                         if drop_pct >= cfg.notifications.price_drop_pct:
                             result.price_drops += 1
-                            alert_queue.append(listing)
-                if is_new and score >= cfg.notifications.score_threshold:
+                            if alertable:
+                                alert_queue.append(listing)
+                if is_new and alertable and score >= cfg.notifications.score_threshold:
                     alert_queue.append(listing)
         except Exception as e:
             log.exception("adapter %s failed", adapter.source)
