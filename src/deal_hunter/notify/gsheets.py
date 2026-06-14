@@ -156,7 +156,6 @@ PRICE_COLUMNS = ("price", "price_per_sqm_eff", "price_before")
 
 # Integer columns — display as bare integers, no decimal point.
 INTEGER_COLUMNS = (
-    "house_number",
     "sqm_eff",
     "sqm_build_eff",
     "lot_sqm_eff",
