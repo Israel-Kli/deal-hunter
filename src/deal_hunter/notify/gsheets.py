@@ -15,13 +15,12 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from deal_hunter.effective import (
     effective_garden_sqm,
     effective_lot_sqm,
-    effective_price_per_sqm,
     effective_rooms,
     effective_sqm,
     effective_sqm_build,
@@ -36,6 +35,8 @@ SHEET_COLUMNS = [
     "score",
     "source",
     "sale_type",
+    "phone",
+    "comments",
     "city",
     "neighborhood",
     "street",
@@ -65,6 +66,8 @@ SHEET_HEADERS = [
     "Score",
     "Source",
     "Sale Type",
+    "Phone",
+    "Comments",
     "City",
     "Neighborhood",
     "Street",
@@ -94,6 +97,8 @@ SHEET_LEGEND = [
     "Heuristic 1–10 investment score",
     "Scraper (yad2, onmap, ad, …); click to open listing",
     "Agent vs Direct sale — Agent rows highlighted light red. Editable.",
+    "Manual: contact phone number — fill in and edits are preserved across syncs",
+    "Manual: free-form notes — preserved across syncs",
     "City",
     "Neighborhood",
     "Street",
@@ -105,7 +110,7 @@ SHEET_LEGEND = [
     "Effective garden area, m² (גינה)",
     "Floor number",
     "Asking price, ₪",
-    "Effective price per m² — gradient green→red (lower is better)",
+    "Live formula: Price ÷ SQM — gradient green→red (lower is better)",
     "Previous asking price, ₪ (if dropped)",
     "Property type (apartment / house / cottage / …)",
     "יחידות דיור count if extracted",
@@ -123,6 +128,8 @@ SHEET_COL_WIDTHS = [
     55,   # score
     90,   # source (hyperlink)
     80,   # sale type
+    120,  # phone
+    220,  # comments
     100,  # city
     120,  # neighborhood
     140,  # street
@@ -181,6 +188,8 @@ DATE_COLUMNS = (
 DATA_COLUMNS_FOR_DIFF = [
     "score",
     "sale_type",
+    "phone",
+    "comments",
     "city",
     "neighborhood",
     "street",
@@ -192,7 +201,6 @@ DATA_COLUMNS_FOR_DIFF = [
     "garden_sqm_eff",
     "floor",
     "price",
-    "price_per_sqm_eff",
     "price_before",
     "listing_type",
     "units_count_eff",
@@ -262,11 +270,16 @@ def _to_cell_str(v: Any) -> str:
 
 
 def _build_data_dict(listing: dict[str, Any]) -> dict[str, Any]:
-    """Return per-column raw value map for one listing (pre-coercion)."""
+    """Return per-column raw value map for one listing (pre-coercion).
+    `phone` and `comments` default to empty; user fills them in directly in the
+    sheet and the merge logic preserves them across cycles.
+    """
     return {
         "score": listing.get("score"),
         "source": listing.get("source", ""),
         "sale_type": "Agent" if listing.get("is_agent") else "Direct",
+        "phone": "",
+        "comments": "",
         "city": listing.get("city", ""),
         "neighborhood": listing.get("neighborhood", ""),
         "street": listing.get("street", ""),
@@ -278,7 +291,6 @@ def _build_data_dict(listing: dict[str, Any]) -> dict[str, Any]:
         "garden_sqm_eff": effective_garden_sqm(listing),
         "floor": listing.get("floor"),
         "price": listing.get("price"),
-        "price_per_sqm_eff": effective_price_per_sqm(listing),
         "price_before": listing.get("price_before"),
         "listing_type": listing.get("listing_type", ""),
         "units_count_eff": effective_units(listing),
@@ -293,6 +305,7 @@ def _build_data_dict(listing: dict[str, Any]) -> dict[str, Any]:
 def _row_from_data(
     data: dict[str, Any],
     *,
+    sheet_row: int = 0,
     disappeared_on: str = "",
     last_changed: str = "",
     change_log: str = "",
@@ -309,6 +322,17 @@ def _row_from_data(
                 out.append(f'=HYPERLINK("{safe_url}", "{safe_src}")')
             else:
                 out.append(src)
+        elif col == "price_per_sqm_eff":
+            # Live formula: Price ÷ SQM, blank if SQM is missing/zero.
+            # Stays correct if user edits Price or SQM directly in the sheet.
+            if sheet_row > 0:
+                price_letter = _index_to_letter(SHEET_COLUMNS.index("price"))
+                sqm_letter = _index_to_letter(SHEET_COLUMNS.index("sqm_eff"))
+                out.append(
+                    f'=IFERROR(ROUND({price_letter}{sheet_row}/{sqm_letter}{sheet_row}), "")'
+                )
+            else:
+                out.append("")
         elif col == "disappeared_on":
             out.append(disappeared_on)
         elif col == "last_changed":
@@ -488,11 +512,25 @@ def _build_rows(
     audit_max: int,
     today: str | None = None,
     now: datetime | None = None,
+    source_latest_scans: dict[str, str] | None = None,
 ) -> tuple[list[list[Any]], list[int]]:
-    """Build sheet rows + indexes of disappeared rows. Pure function."""
+    """Build sheet rows + indexes of disappeared rows. Pure function.
+
+    If `source_latest_scans` is provided, a listing is treated as "active" iff
+    its `last_seen_at` is within 15 minutes of its source's most recent scan
+    timestamp — this avoids flagging listings as disappeared when their source
+    simply hasn't been scanned recently. Without the map, falls back to the
+    fixed `cutoff_minutes` cutoff.
+    """
     today = today or _today()
     now = now or _now_utc()
     cutoff_ts = now.timestamp() - cutoff_minutes * 60
+    src_latest_dt: dict[str, datetime] = {}
+    if source_latest_scans:
+        for src, ts in source_latest_scans.items():
+            parsed = _parse_iso_dt(ts)
+            if parsed:
+                src_latest_dt[src] = parsed
 
     records: list[tuple[tuple, dict[str, Any], str, str, str, str]] = []
 
@@ -506,7 +544,13 @@ def _build_rows(
         shadow = _load_shadow(prior.get("sync_shadow", ""))
 
         last_seen = _parse_iso_dt(listing.get("last_seen_at"))
-        is_active = last_seen is not None and last_seen.timestamp() >= cutoff_ts
+        if source in src_latest_dt and last_seen is not None:
+            # Active = was observed in (or near) the most recent scan of its source.
+            src_ts = src_latest_dt[source]
+            is_active = last_seen >= src_ts - timedelta(minutes=15)
+        else:
+            # Fallback: fixed wall-clock cutoff.
+            is_active = last_seen is not None and last_seen.timestamp() >= cutoff_ts
 
         fresh_data = _build_data_dict(listing)
         merged, new_shadow = _merge_user_edits(prior, shadow, fresh_data)
@@ -569,8 +613,10 @@ def _build_rows(
     rows_out: list[list[Any]] = []
     disappeared_rows: list[int] = []
     for idx, (_sk, data, disappeared_on, last_changed, change_log_str, sync_shadow_str) in enumerate(records):
+        sheet_row = LEGEND_ROWS + 1 + idx  # 1-indexed row in the sheet
         row = _row_from_data(
             data,
+            sheet_row=sheet_row,
             disappeared_on=disappeared_on,
             last_changed=last_changed,
             change_log=change_log_str,
@@ -594,6 +640,7 @@ def sync(
     tab_name: str = "Deal Hunter-2026",
     disappeared_cutoff_minutes: int = 120,
     audit_max_entries: int = 20,
+    source_latest_scans: dict[str, str] | None = None,
 ) -> bool:
     """Sync the listings snapshot into the given tab. Returns True on success."""
     if not sheet_id:
@@ -642,6 +689,7 @@ def sync(
         existing,
         cutoff_minutes=disappeared_cutoff_minutes,
         audit_max=audit_max_entries,
+        source_latest_scans=source_latest_scans,
     )
 
     return _write_block(ws, sh, rows_out, disappeared_rows)

@@ -293,6 +293,12 @@ def run_once(cfg: cfg_mod.Config, *, enrich: bool = False, max_items: int | None
 
             with ListingsRepo(db_path) as repo:
                 listings = repo.all_for_dashboard()
+                source_latest_scans = {
+                    row[0]: row[1]
+                    for row in repo.conn.execute(
+                        "SELECT source, MAX(ts) FROM scan_log GROUP BY source"
+                    ).fetchall()
+                }
             cutoff = cfg.gsheets.disappeared_cutoff_minutes
             if cutoff is None:
                 cutoff = max(2 * cfg.schedule.poll_interval_minutes, 120)
@@ -303,6 +309,7 @@ def run_once(cfg: cfg_mod.Config, *, enrich: bool = False, max_items: int | None
                 tab_name=cfg.gsheets.tab_name,
                 disappeared_cutoff_minutes=cutoff,
                 audit_max_entries=cfg.gsheets.audit_max_entries,
+                source_latest_scans=source_latest_scans,
             )
         except Exception:
             log.exception("gsheets sync failed")

@@ -101,6 +101,78 @@ def test_user_edit_preserved_via_shadow():
     assert rows2[0][price_idx] == 1_800_000  # user edit preserved
 
 
+def test_price_per_sqm_is_a_formula():
+    rows, _ = gs._build_rows(
+        [_listing()], {}, cutoff_minutes=120, audit_max=20,
+        today=FIXED_TODAY, now=FIXED_NOW,
+    )
+    ppsqm_cell = rows[0][gs.SHEET_COLUMNS.index("price_per_sqm_eff")]
+    assert isinstance(ppsqm_cell, str) and ppsqm_cell.startswith("=IFERROR(")
+    # The formula must reference the same row in price (col P) and sqm (col K).
+    assert "ROUND(" in ppsqm_cell
+
+
+def test_phone_and_comments_columns_exist():
+    assert "phone" in gs.SHEET_COLUMNS
+    assert "comments" in gs.SHEET_COLUMNS
+    assert "Phone" in gs.SHEET_HEADERS
+    assert "Comments" in gs.SHEET_HEADERS
+
+
+def test_phone_and_comments_default_empty_and_preserved():
+    """Phone/Comments start empty; user fills them; next cycle keeps the value."""
+    rows1, _ = gs._build_rows(
+        [_listing()], {}, cutoff_minutes=120, audit_max=20,
+        today=FIXED_TODAY, now=FIXED_NOW,
+    )
+    phone_idx = gs.SHEET_COLUMNS.index("phone")
+    comments_idx = gs.SHEET_COLUMNS.index("comments")
+    assert rows1[0][phone_idx] == ""
+    assert rows1[0][comments_idx] == ""
+
+    # Simulate the user typing into Phone and Comments
+    existing = _row_to_strings(rows1[0])
+    existing["phone"] = "+972-50-1234567"
+    existing["comments"] = "Saw it Tuesday, great location"
+    existing["sync_shadow"] = rows1[0][gs.SHEET_COLUMNS.index("sync_shadow")]
+    existing_map = {("yad2", "abc123"): existing}
+
+    rows2, _ = gs._build_rows(
+        [_listing()], existing_map, cutoff_minutes=120, audit_max=20,
+        today=FIXED_TODAY, now=FIXED_NOW,
+    )
+    assert rows2[0][phone_idx] == "+972-50-1234567"
+    assert rows2[0][comments_idx] == "Saw it Tuesday, great location"
+
+
+def test_per_source_scan_active_when_seen_with_latest_scan():
+    """Listing observed in the most recent scan of its source → active,
+    regardless of the wall-clock cutoff."""
+    scan_ts = FIXED_NOW - timedelta(minutes=5)
+    last_seen_iso = scan_ts.isoformat()  # observed right in that scan
+    rows, disappeared = gs._build_rows(
+        [_listing(last_seen_at=last_seen_iso)], {},
+        cutoff_minutes=120, audit_max=20,
+        today=FIXED_TODAY, now=FIXED_NOW,
+        source_latest_scans={"yad2": scan_ts.isoformat()},
+    )
+    assert disappeared == []
+    assert rows[0][gs.SHEET_COLUMNS.index("disappeared_on")] == ""
+
+
+def test_per_source_scan_disappeared_when_recent_scan_missed_listing():
+    """Source ran recently but didn't re-observe this listing → disappeared."""
+    scan_ts = FIXED_NOW - timedelta(minutes=2)
+    stale_seen = (FIXED_NOW - timedelta(days=5)).isoformat()
+    rows, disappeared = gs._build_rows(
+        [_listing(last_seen_at=stale_seen)], {},
+        cutoff_minutes=120, audit_max=20,
+        today=FIXED_TODAY, now=FIXED_NOW,
+        source_latest_scans={"yad2": scan_ts.isoformat()},
+    )
+    assert disappeared == [0]
+
+
 def test_no_user_edit_uses_fresh_db_value():
     """If user did not touch a cell, next cycle uses the DB value."""
     rows1, _ = gs._build_rows(
