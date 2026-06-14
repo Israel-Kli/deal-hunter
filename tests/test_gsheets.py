@@ -90,6 +90,32 @@ def test_no_link_column():
     assert "Link" not in gs.SHEET_HEADERS
 
 
+def test_no_fair_price_column():
+    assert "fair_price_estimate" not in gs.SHEET_COLUMNS
+    assert "Fair Price" not in gs.SHEET_HEADERS
+
+
+def test_sqm_family_columns_present():
+    for col in ("sqm_eff", "sqm_build_eff", "lot_sqm_eff", "garden_sqm_eff"):
+        assert col in gs.SHEET_COLUMNS
+    # Order: SQM → Built → Lot → Garden (right after SQM, before Floor)
+    idx = [gs.SHEET_COLUMNS.index(c) for c in ("sqm_eff", "sqm_build_eff", "lot_sqm_eff", "garden_sqm_eff", "floor")]
+    assert idx == sorted(idx), f"expected sqm family in order, got indexes {idx}"
+
+
+def test_sqm_family_values_in_row():
+    l = _listing(sqm=120, sqm_build=140, lot_sqm=300, garden_sqm=50)
+    rows, _ = gs._build_rows(
+        [l], {}, cutoff_minutes=120, audit_max=20,
+        today=FIXED_TODAY, now=FIXED_NOW,
+    )
+    row = rows[0]
+    assert row[gs.SHEET_COLUMNS.index("sqm_eff")] == 120
+    assert row[gs.SHEET_COLUMNS.index("sqm_build_eff")] == 140
+    assert row[gs.SHEET_COLUMNS.index("lot_sqm_eff")] == 300
+    assert row[gs.SHEET_COLUMNS.index("garden_sqm_eff")] == 50
+
+
 def test_new_listing_gets_today_in_last_changed():
     rows, disappeared = gs._build_rows(
         [_listing()], {}, cutoff_minutes=120, audit_max=20,
