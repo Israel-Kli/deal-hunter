@@ -94,6 +94,8 @@ class GSheetsCfg(BaseModel):
     sheet_id: str = ""
     credentials_path: str = "credentials.json"
     tab_name: str = "Deal Hunter-2026"
+    archive_tab_name: str = ""
+    archive_cities: list[str] = Field(default_factory=list)
     disappeared_cutoff_minutes: int | None = None
     audit_max_entries: int = 20
 
