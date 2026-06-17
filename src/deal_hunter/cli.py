@@ -182,7 +182,7 @@ def _scan_adapter(
                 listing.score_reasons = reasons
                 is_new, prev_price = repo.upsert(listing)
                 result.fetched += 1
-                alertable = listing.floor is None or listing.floor <= 1
+                alertable = listing.floor is None or listing.floor <= 2
                 if is_new:
                     result.new += 1
                 else:

@@ -304,7 +304,7 @@ class ListingsRepo:
     def all_for_dashboard(self) -> list[dict[str, Any]]:
         rows = self.conn.execute(
             "SELECT * FROM listings "
-            "WHERE floor IS NULL OR floor <= 1 "
+            "WHERE floor IS NULL OR floor <= 2 "
             "ORDER BY score DESC NULLS LAST, first_seen_at DESC"
         ).fetchall()
         out: list[dict[str, Any]] = []
