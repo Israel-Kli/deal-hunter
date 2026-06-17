@@ -151,12 +151,23 @@ def _scan_adapter(
         try:
             # Phase 1: collect + enrich
             listings: list[Listing] = []
+            s = cfg.search
             for listing in adapter.fetch_feed(SearchFilters()):
                 if enrich or getattr(adapter, "enrich_always", False):
                     try:
                         adapter.fetch_detail(listing)
                     except Exception as e:
                         result.errors.append(f"enrich {listing.source_id}: {e}")
+                # Re-apply the search filter post-enrich. Some adapters (notably
+                # ad.co.il) can't read rooms / sqm from the card and only
+                # populate them via fetch_detail, so the in-adapter filter sees
+                # None and lets the listing through.
+                if listing.rooms is not None and not (s.rooms_min <= listing.rooms <= s.rooms_max):
+                    continue
+                if listing.price is not None and not (s.price_min <= listing.price <= s.price_max):
+                    continue
+                if s.min_sqm and listing.sqm is not None and listing.sqm < s.min_sqm:
+                    continue
                 try:
                     enrich_listing_fair_price(listing, repo.conn)
                 except Exception as e:

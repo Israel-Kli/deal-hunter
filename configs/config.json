@@ -3,7 +3,7 @@
     "rooms_min": 5,
     "rooms_max": 15,
     "price_min": 1700000,
-    "price_max": 6500000,
+    "price_max": 7000000,
     "min_sqm": 0,
     "max_listing_age_days": 365,
     "exclude_ground_floor": false
