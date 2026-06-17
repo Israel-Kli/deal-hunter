@@ -482,6 +482,11 @@ def _coerce_back(s: Any, fresh_v: Any) -> Any:
     return str(s).strip()
 
 
+SHEETS_ERROR_SENTINELS = frozenset({
+    "#ERROR!", "#REF!", "#VALUE!", "#NAME?", "#N/A", "#DIV/0!", "#NULL!", "#NUM!",
+})
+
+
 def _merge_user_edits(
     prior: dict[str, Any],
     shadow: dict[str, Any],
@@ -489,7 +494,11 @@ def _merge_user_edits(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """For each EDITABLE column: if the prior sheet cell differs from the shadow
     (what we last wrote), the user edited it — preserve their value. Otherwise
-    use the fresh value from the DB. Returns (merged, new_shadow)."""
+    use the fresh value from the DB. Returns (merged, new_shadow).
+
+    A Sheets-rendered error sentinel (e.g. ``#ERROR!`` from a broken HYPERLINK
+    formula) is never a user edit — always let the fresh value overwrite it.
+    """
     merged = dict(fresh_data)
     new_shadow: dict[str, Any] = {}
     for col in EDITABLE_COLUMNS:
@@ -497,7 +506,7 @@ def _merge_user_edits(
         if col in shadow:
             existing = prior.get(col, "")
             shadow_v = shadow.get(col)
-            if _norm(existing) != _norm(shadow_v):
+            if _norm(existing) != _norm(shadow_v) and existing not in SHEETS_ERROR_SENTINELS:
                 merged[col] = _coerce_back(existing, fresh_v)
         new_shadow[col] = merged.get(col)
     return merged, new_shadow
