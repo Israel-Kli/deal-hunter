@@ -108,6 +108,11 @@ class Yad2Adapter:
         ]
         if s.get("min_sqm"):
             params.append(("squareMeterMin", str(s["min_sqm"])))
+        area = city.get("yad2_area")
+        city_code = city.get("city_code")
+        if area and city_code:
+            params.append(("area", str(area)))
+            params.append(("city", str(city_code)))
         if page > 1:
             params.append(("page", str(page)))
         qs = "&".join(f"{k}={v}" for k, v in params)
