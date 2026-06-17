@@ -304,10 +304,15 @@ def run_once(cfg: cfg_mod.Config, *, enrich: bool = False, max_items: int | None
 
             with ListingsRepo(db_path) as repo:
                 listings = repo.all_for_dashboard()
+                # Only consider the latest *successful* scan per source as the
+                # freshness anchor. A scan that returned 0 listings (e.g. Yad2
+                # blocked by anti-bot CAPTCHA) must NOT move the freshness
+                # cursor forward — otherwise every previously-seen listing for
+                # that source gets cascade-marked as disappeared in the sheet.
                 source_latest_scans = {
                     row[0]: row[1]
                     for row in repo.conn.execute(
-                        "SELECT source, MAX(ts) FROM scan_log GROUP BY source"
+                        "SELECT source, MAX(ts) FROM scan_log WHERE fetched > 0 GROUP BY source"
                     ).fetchall()
                 }
             cutoff = cfg.gsheets.disappeared_cutoff_minutes
