@@ -351,7 +351,7 @@ def _row_from_data(
             url = data.get("url", "")
             if src and url:
                 safe_url = url.replace('"', '%22')
-                safe_src = str(src).replace('"', '\\"')
+                safe_src = str(src).replace('"', '""')
                 out.append(f'=HYPERLINK("{safe_url}", "{safe_src}")')
             else:
                 out.append(src)
@@ -404,7 +404,7 @@ def _address_cell(data: dict[str, Any]) -> str:
         return ""
     url = _street_view_url(data)
     safe_url = url.replace('"', '%22')
-    safe_addr = str(addr).replace('"', '\\"')
+    safe_addr = str(addr).replace('"', '""')
     return f'=HYPERLINK("{safe_url}", "{safe_addr}")'
 
 
