@@ -1,33 +1,35 @@
 {
   "search": {
-    "rooms_min": 7,
+    "rooms_min": 5,
     "rooms_max": 15,
-    "price_min": 1800000,
-    "price_max": 5500000,
-    "min_sqm": 180,
+    "price_min": 1700000,
+    "price_max": 6500000,
+    "min_sqm": 110,
     "max_listing_age_days": 365,
     "exclude_ground_floor": false
   },
   "cities": [
     {
-      "name": "Ariel",
-      "city_code": "7100",
-      "slug": "ariel",
-      "yad2_id": "3570",
-      "yad2_region": "partnership/east",
-      "onmap_slug": "ariel",
-      "hebrew_name": "אריאל",
+      "name": "Or Yehuda",
+      "city_code": "2400",
+      "slug": "or-yehuda",
+      "yad2_id": "2400",
+      "yad2_area": "10",
+      "yad2_region": "center-and-sharon",
+      "onmap_slug": "or-yehuda",
+      "hebrew_name": "אור יהודה",
       "filter_areas": false,
       "area_keywords": []
     },
     {
-      "name": "Beit Shemesh",
-      "city_code": "3000",
-      "slug": "beit-shemesh",
-      "yad2_id": "2610",
-      "yad2_region": "jerusalem-area",
-      "onmap_slug": "beit-shemesh",
-      "hebrew_name": "בית שמש",
+      "name": "Yehud Monosson",
+      "city_code": "9400",
+      "slug": "yehud-monosson",
+      "yad2_id": "9400",
+      "yad2_area": "10",
+      "yad2_region": "center-and-sharon",
+      "onmap_slug": "yehud",
+      "hebrew_name": "יהוד מונוסון",
       "filter_areas": false,
       "area_keywords": []
     }
@@ -37,10 +39,11 @@
     "madlan": false,
     "onmap":  true,
     "ad":     true,
-    "reariel": true,
-    "spectra": true,
-    "nadlanh": true,
-    "simplestate": true
+    "reariel": false,
+    "spectra": false,
+    "nadlanh": false,
+    "simplestate": true,
+    "komo": true
   },
   "comps": {
     "yad2_deals": true,
@@ -67,6 +70,14 @@
     "batch_size": 20,
     "timeout_sec": 20.0,
     "api_key_env": "GEMINI_API_KEY"
+  },
+  "gsheets": {
+    "enabled": true,
+    "sheet_id": "1Hijk8Q7DePMXzhPbKfc2ktgG8Nq-naIikGhenK6Wowk",
+    "credentials_path": "credentials.json",
+    "tab_name": "Deal Hunter-2026",
+    "disappeared_cutoff_minutes": null,
+    "audit_max_entries": 20
   },
   "dashboard_port": 8081,
   "data_dir": "data"
