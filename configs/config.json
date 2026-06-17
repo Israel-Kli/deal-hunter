@@ -4,7 +4,7 @@
     "rooms_max": 15,
     "price_min": 1700000,
     "price_max": 6500000,
-    "min_sqm": 110,
+    "min_sqm": 0,
     "max_listing_age_days": 365,
     "exclude_ground_floor": false
   },
@@ -76,6 +76,8 @@
     "sheet_id": "1Hijk8Q7DePMXzhPbKfc2ktgG8Nq-naIikGhenK6Wowk",
     "credentials_path": "credentials.json",
     "tab_name": "Deal Hunter-2026",
+    "archive_tab_name": "Archive",
+    "archive_cities": ["אריאל", "בית שמש"],
     "disappeared_cutoff_minutes": null,
     "audit_max_entries": 20
   },

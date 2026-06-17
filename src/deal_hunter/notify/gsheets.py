@@ -694,17 +694,41 @@ def _build_rows(
 # ---- sync entry point ------------------------------------------------------
 
 
+def _open_or_create_tab(sh, title: str, expected_rows: int):
+    try:
+        return sh.worksheet(title)
+    except Exception:
+        try:
+            return sh.add_worksheet(
+                title=title,
+                rows=max(expected_rows + LEGEND_ROWS + 50, 200),
+                cols=len(SHEET_COLUMNS),
+            )
+        except Exception as e:
+            log.error("gsheets: failed to create worksheet %r: %s", title, e)
+            return None
+
+
 def sync(
     listings: list[dict],
     *,
     sheet_id: str,
     credentials_path: str,
     tab_name: str = "Deal Hunter-2026",
+    archive_tab_name: str = "",
+    archive_cities: list[str] | None = None,
     disappeared_cutoff_minutes: int = 120,
     audit_max_entries: int = 20,
     source_latest_scans: dict[str, str] | None = None,
 ) -> bool:
-    """Sync the listings snapshot into the given tab. Returns True on success."""
+    """Sync the listings snapshot into the given tab. Returns True on success.
+
+    When *archive_tab_name* and *archive_cities* are both set, listings whose
+    `city` is in *archive_cities* are routed to a second tab. On first run, the
+    archive tab is auto-created and any user edits previously stored against
+    those listings in the main tab are migrated across via the existing-row
+    fallback (main_existing fills gaps in archive_existing).
+    """
     if not sheet_id:
         log.warning("gsheets: sheet_id not set — skipping")
         return False
@@ -713,7 +737,7 @@ def sync(
         return False
 
     try:
-        import gspread
+        import gspread  # noqa: F401
         from google.oauth2.service_account import Credentials
     except ImportError as e:
         log.error("gsheets: missing dependency %s — pip install gspread google-auth", e)
@@ -724,6 +748,7 @@ def sync(
         "https://www.googleapis.com/auth/drive",
     ]
     try:
+        import gspread
         creds = Credentials.from_service_account_file(credentials_path, scopes=scopes)
         client = gspread.authorize(creds)
         sh = client.open_by_key(sheet_id)
@@ -731,30 +756,52 @@ def sync(
         log.error("gsheets: auth/open failed: %s", e)
         return False
 
-    try:
-        ws = sh.worksheet(tab_name)
-    except gspread.exceptions.WorksheetNotFound:
-        try:
-            ws = sh.add_worksheet(
-                title=tab_name,
-                rows=max(len(listings) + LEGEND_ROWS + 50, 200),
-                cols=len(SHEET_COLUMNS),
-            )
-            log.info("gsheets: created tab %r", tab_name)
-        except Exception as e:
-            log.error("gsheets: failed to create worksheet %r: %s", tab_name, e)
-            return False
+    archive_set = set(archive_cities or [])
+    use_archive = bool(archive_tab_name and archive_set)
+    if use_archive:
+        main_listings = [l for l in listings if (l.get("city") or "") not in archive_set]
+        archive_listings = [l for l in listings if (l.get("city") or "") in archive_set]
+    else:
+        main_listings, archive_listings = listings, []
 
-    existing = _read_existing(ws)
-    rows_out, disappeared_rows = _build_rows(
-        listings,
-        existing,
+    main_ws = _open_or_create_tab(sh, tab_name, len(main_listings))
+    if main_ws is None:
+        return False
+    main_existing = _read_existing(main_ws)
+
+    archive_ws = None
+    archive_existing: dict[tuple[str, str], dict[str, str]] = {}
+    if use_archive:
+        archive_ws = _open_or_create_tab(sh, archive_tab_name, len(archive_listings))
+        if archive_ws is not None:
+            archive_existing = _read_existing(archive_ws)
+
+    main_rows, main_disap = _build_rows(
+        main_listings,
+        main_existing,
         cutoff_minutes=disappeared_cutoff_minutes,
         audit_max=audit_max_entries,
         source_latest_scans=source_latest_scans,
     )
+    ok_main = _write_block(main_ws, sh, main_rows, main_disap)
 
-    return _write_block(ws, sh, rows_out, disappeared_rows)
+    ok_archive = True
+    if archive_ws is not None:
+        # Migration fallback: on first run the archive tab is empty, but the
+        # rows for these listings may still live in the main tab with the
+        # user's prior edits + sync_shadow. Merge main_existing into the
+        # archive lookup so _build_rows can preserve those edits.
+        archive_existing_merged = {**main_existing, **archive_existing}
+        arch_rows, arch_disap = _build_rows(
+            archive_listings,
+            archive_existing_merged,
+            cutoff_minutes=disappeared_cutoff_minutes,
+            audit_max=audit_max_entries,
+            source_latest_scans=source_latest_scans,
+        )
+        ok_archive = _write_block(archive_ws, sh, arch_rows, arch_disap)
+
+    return ok_main and ok_archive
 
 
 def _write_block(ws, sh, rows_out: list[list[Any]], disappeared_rows: list[int]) -> bool:
