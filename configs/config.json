@@ -50,7 +50,7 @@
     "nadlan_gov": false
   },
   "schedule": {
-    "poll_interval_minutes": 60,
+    "poll_interval_minutes": 180,
     "delay_between_requests_sec": 3.0,
     "max_pages": 20
   },
