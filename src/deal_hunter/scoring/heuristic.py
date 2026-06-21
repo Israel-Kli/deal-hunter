@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime
 from typing import Any
 
@@ -17,6 +18,62 @@ from deal_hunter.scoring.description_signals import (
 )
 
 log = logging.getLogger(__name__)
+
+# Or Chana school in Or Yehuda — used as a positive proximity signal.
+# Change these constants (or lift to ScoringCfg) if the focus school moves.
+OR_CHANA_LAT = 32.025982
+OR_CHANA_LON = 34.864421
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    r = 6371.0
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlam = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return r * c
+
+
+def _school_distance_bonus(listing: Listing) -> tuple[float, dict[str, Any]]:
+    if listing.lat is None or listing.lon is None:
+        return 0.0, {}
+    km = _haversine_km(listing.lat, listing.lon, OR_CHANA_LAT, OR_CHANA_LON)
+    if km < 0.5:
+        bonus = 1.5
+    elif km < 1.0:
+        bonus = 1.0
+    elif km < 1.5:
+        bonus = 0.6
+    elif km < 2.5:
+        bonus = 0.2
+    elif km < 4.0:
+        bonus = 0.0
+    else:
+        bonus = -0.5
+    return bonus, {
+        "school_distance_km": round(km, 2),
+        "school_distance_bonus": round(bonus, 2),
+    }
+
+
+def _physical_features_bonus(listing: Listing) -> tuple[float, dict[str, Any]]:
+    """Bonuses for amenities that matter for apartments + houses alike."""
+    bonus = 0.0
+    detail: dict[str, Any] = {}
+    if listing.parking:
+        bonus += 0.3
+        detail["parking"] = True
+    if listing.balcony:
+        bonus += 0.2
+        detail["balcony"] = True
+    if listing.renovated:
+        bonus += 0.4
+        detail["renovated"] = True
+    if bonus:
+        detail["features_bonus"] = round(bonus, 2)
+    return bonus, detail
 
 MARKET_REFS: list[tuple[str, str, int, int]] = [
     ("תל אביב", "צפון הישן", 50_000, 65_000),
@@ -119,6 +176,16 @@ def score_listing(listing: Listing) -> tuple[float, dict[str, Any]]:
         reasons["seller_channel"] = "private"
         reasons["seller_adjustment"] = adj
         score += adj
+
+    school_bonus, school_detail = _school_distance_bonus(listing)
+    if school_detail:
+        score += school_bonus
+        reasons.update(school_detail)
+
+    feat_bonus, feat_detail = _physical_features_bonus(listing)
+    if feat_bonus:
+        score += feat_bonus
+        reasons.update(feat_detail)
 
     if listing.price_before and listing.price_before > price:
         drop = (listing.price_before - price) / listing.price_before * 100

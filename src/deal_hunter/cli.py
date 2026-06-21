@@ -507,6 +507,44 @@ def cmd_dashboard(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_rescore(args: argparse.Namespace) -> int:
+    """Re-run score_listing against every row in the DB and UPDATE score +
+    score_reasons. Useful after changes to the scoring heuristic — avoids
+    waiting for a full re-scrape cycle."""
+    import json as _json
+    cfg = cfg_mod.load(args.config)
+    db_path = Path(cfg.data_dir) / "deal-hunter.db"
+    listing_fields = set(Listing.model_fields.keys())
+    bool_fields = ("parking", "elevator", "balcony", "ac", "mamad", "renovated", "is_agent", "is_favorite")
+    updated = skipped = 0
+    with ListingsRepo(db_path) as repo:
+        rows = repo.conn.execute("SELECT * FROM listings").fetchall()
+        for r in rows:
+            d = dict(r)
+            d["images"] = _json.loads(d.get("images_json") or "[]")
+            d["tags"] = _json.loads(d.get("tags_json") or "[]")
+            d["score_reasons"] = _json.loads(d.get("score_reasons") or "{}")
+            d["source_payload"] = _json.loads(d.get("source_payload") or "{}")
+            for bf in bool_fields:
+                d[bf] = bool(d.get(bf))
+            clean = {k: v for k, v in d.items() if k in listing_fields}
+            try:
+                listing = Listing(**clean)
+            except Exception as e:
+                log.warning("rescore: skip %s/%s — %s", d.get("source"), d.get("source_id"), e)
+                skipped += 1
+                continue
+            score, reasons = score_listing(listing)
+            repo.conn.execute(
+                "UPDATE listings SET score=?, score_reasons=? WHERE source=? AND source_id=?",
+                (score, _json.dumps(reasons, ensure_ascii=False), listing.source, listing.source_id),
+            )
+            updated += 1
+        repo.conn.commit()
+    log.info("rescore: updated=%d skipped=%d", updated, skipped)
+    return 0
+
+
 def main() -> int:
     p = argparse.ArgumentParser(prog="deal-hunter")
     p.add_argument("--debug", action="store_true", help="Enable debug-level logging")
@@ -540,6 +578,9 @@ def main() -> int:
 
     dash_p = sub.add_parser("dashboard", help="Serve the dashboard HTTP")
     dash_p.set_defaults(func=cmd_dashboard)
+
+    rescore_p = sub.add_parser("rescore", help="Re-score every listing in the DB without re-scraping")
+    rescore_p.set_defaults(func=cmd_rescore)
 
     args = p.parse_args()
     _setup_logging(args.debug)
