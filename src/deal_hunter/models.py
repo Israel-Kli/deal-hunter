@@ -55,6 +55,11 @@ class Listing(BaseModel):
     first_seen_at: datetime | None = None
     last_seen_at: datetime | None = None
 
+    created_at: str = ""
+    updated_at: str = ""
+    ends_at: str = ""
+    rebounced_at: str = ""
+
     canonical_id: str | None = None
 
     fair_price_estimate: int | None = None

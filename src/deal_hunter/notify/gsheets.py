@@ -50,6 +50,10 @@ SHEET_COLUMNS = [
     "price",
     "price_per_sqm_eff",
     "price_before",
+    "created_at",
+    "updated_at",
+    "ends_at",
+    "rebounced_at",
     "last_seen_at",
     "why_score",
     "disappeared_on",
@@ -79,6 +83,10 @@ SHEET_HEADERS = [
     "מחיר",
     "₪/מ\"ר",
     "מחיר קודם",
+    "נוצר ב",
+    "עודכן ב",
+    "מסתיים ב",
+    "הוקפץ ב",
     "נצפה לאחרונה",
     "פירוט ניקוד",
     "תאריך היעלמות",
@@ -108,6 +116,10 @@ SHEET_LEGEND = [
     "מחיר מבוקש, ₪",
     "נוסחה חיה: מחיר ÷ מ\"ר בנוי — גרדיאנט ירוק→אדום (נמוך זה טוב יותר)",
     "מחיר קודם, ₪ (אם ירד)",
+    "תאריך פרסום ראשון לפי המקור (Yad2)",
+    "תאריך עדכון אחרון של המודעה במקור",
+    "תאריך תפוגה אוטומטית של המודעה",
+    "תאריך ההקפצה האחרונה לראש הפיד (Yad2 bump-to-top)",
     "תאריך הסריקה האחרונה שראתה את המודעה",
     "תקציר נימוקי הניקוד",
     "התאריך שבו המודעה הפסיקה להופיע באף מקור; השורה הופכת אפורה",
@@ -137,6 +149,10 @@ SHEET_COL_WIDTHS = [
     100,  # מחיר
     80,   # ₪/מ"ר
     100,  # מחיר קודם
+    90,   # נוצר ב
+    90,   # עודכן ב
+    90,   # מסתיים ב
+    90,   # הוקפץ ב
     100,  # נצפה לאחרונה
     220,  # פירוט ניקוד
     100,  # תאריך היעלמות
@@ -170,6 +186,10 @@ DATE_COLUMNS = (
     "last_seen_at",
     "disappeared_on",
     "last_changed",
+    "created_at",
+    "updated_at",
+    "ends_at",
+    "rebounced_at",
 )
 
 # Columns whose values participate in the Change Log diff. Identity,
@@ -326,6 +346,10 @@ def _build_data_dict(listing: dict[str, Any], *, today: datetime | None = None) 
         "first_listed_date": first_listed,         # used internally (sort) — not a sheet column
         "comments": "",
         "description": _normalize_description(listing.get("description", "")),
+        "created_at": (listing.get("created_at") or "")[:10],
+        "updated_at": (listing.get("updated_at") or "")[:10],
+        "ends_at": (listing.get("ends_at") or "")[:10],
+        "rebounced_at": (listing.get("rebounced_at") or "")[:10],
         "last_seen_at": (str(listing.get("last_seen_at") or ""))[:10],
         "why_score": _score_reasons_summary(listing),
         "url": listing.get("url", ""),

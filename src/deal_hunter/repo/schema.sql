@@ -42,6 +42,11 @@ CREATE TABLE IF NOT EXISTS listings (
     first_seen_at   TEXT    NOT NULL,
     last_seen_at    TEXT    NOT NULL,
 
+    created_at      TEXT    DEFAULT '',
+    updated_at      TEXT    DEFAULT '',
+    ends_at         TEXT    DEFAULT '',
+    rebounced_at    TEXT    DEFAULT '',
+
     canonical_id    TEXT,
 
     fair_price_estimate INTEGER,
