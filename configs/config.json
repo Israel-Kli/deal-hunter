@@ -20,18 +20,6 @@
       "hebrew_name": "אור יהודה",
       "filter_areas": false,
       "area_keywords": []
-    },
-    {
-      "name": "Yehud Monosson",
-      "city_code": "9400",
-      "slug": "yehud-monosson",
-      "yad2_id": "9400",
-      "yad2_area": "10",
-      "yad2_region": "center-and-sharon",
-      "onmap_slug": "yehud",
-      "hebrew_name": "יהוד מונוסון",
-      "filter_areas": false,
-      "area_keywords": []
     }
   ],
   "sources": {
