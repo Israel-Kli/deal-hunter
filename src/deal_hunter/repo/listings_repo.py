@@ -72,6 +72,10 @@ class ListingsRepo:
         if "year_built" not in columns:
             self.conn.execute("ALTER TABLE listings ADD COLUMN year_built INTEGER")
             added.append("year_built")
+        for col in ("created_at", "updated_at", "ends_at", "rebounced_at"):
+            if col not in columns:
+                self.conn.execute(f"ALTER TABLE listings ADD COLUMN {col} TEXT DEFAULT ''")
+                added.append(col)
         if added:
             log.info("DB migration: added columns %s", added)
 
@@ -149,7 +153,8 @@ class ListingsRepo:
                 units_count, garden_sqm, lot_sqm,
                 rooms_user,
                 sqm_user, sqm_build_user, units_count_user, garden_sqm_user, lot_sqm_user,
-                year_built
+                year_built,
+                created_at, updated_at, ends_at, rebounced_at
             ) VALUES (
                 ?,?,?, ?,?,?,?,?,
                 ?,?,?,?,
@@ -165,7 +170,8 @@ class ListingsRepo:
                 ?,?,?,
                 ?,
                 ?,?,?,?,
-                ?
+                ?,
+                ?,?,?,?
             )
             ON CONFLICT(source, source_id) DO UPDATE SET
                 url=excluded.url,
@@ -207,7 +213,11 @@ class ListingsRepo:
                 units_count=excluded.units_count,
                 garden_sqm=excluded.garden_sqm,
                 lot_sqm=excluded.lot_sqm,
-                year_built=excluded.year_built
+                year_built=excluded.year_built,
+                created_at=excluded.created_at,
+                updated_at=excluded.updated_at,
+                ends_at=excluded.ends_at,
+                rebounced_at=excluded.rebounced_at
             """,
             (
                 listing.source, listing.source_id, listing.url,
@@ -237,6 +247,8 @@ class ListingsRepo:
                 listing.units_count_user, listing.garden_sqm_user,
                 listing.lot_sqm_user,
                 listing.year_built,
+                listing.created_at, listing.updated_at,
+                listing.ends_at, listing.rebounced_at,
             ),
         )
         self.conn.execute(

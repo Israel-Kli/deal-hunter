@@ -200,7 +200,16 @@ class Yad2Adapter:
         if cover and cover not in images:
             images.insert(0, cover)
 
-        publish_date = _publish_date_from_images(images)
+        dates_block = _extract_dates(item)
+        created_at_str = dates_block.get("created_at", "")
+        publish_date: datetime | None = None
+        if created_at_str:
+            try:
+                publish_date = datetime.fromisoformat(created_at_str)
+            except ValueError:
+                publish_date = None
+        if publish_date is None:
+            publish_date = _publish_date_from_images(images)
         max_age = s.get("max_listing_age_days", 30)
         if publish_date and publish_date < datetime.now() - timedelta(days=max_age):
             log.debug("Yad2 filtered: reason=too_old token=%s publish_date=%s max_age=%d", token, publish_date.strftime("%Y-%m-%d") if publish_date else "?", max_age)
@@ -216,7 +225,7 @@ class Yad2Adapter:
         coords = addr.get("coords", {}) or {}
 
         log.debug("Yad2 parsed: token=%s price=%d rooms=%s sqm=%s city=%s neighborhood=%s", token, price, rooms, size, city_name, neighborhood)
-        pub_s = publish_date.strftime("%Y-%m-%d") if publish_date else ""
+        pub_s = created_at_str or (publish_date.strftime("%Y-%m-%d") if publish_date else "")
         desc = item.get("description") or item.get("text") or item.get("info") or ""
         if not desc:
             desc = meta.get("description", "") or meta.get("text", "") or ""
@@ -253,6 +262,10 @@ class Yad2Adapter:
             lon=coords.get("lon"),
             publish_date=pub_s,
             first_listed_date=pub_s,
+            created_at=dates_block.get("created_at", ""),
+            updated_at=dates_block.get("updated_at", ""),
+            ends_at=dates_block.get("ends_at", ""),
+            rebounced_at=dates_block.get("rebounced_at", ""),
             source_payload={"_slug": city.get("yad2_region") or city.get("slug", "")},
             year_built=year_built,
         ), None
@@ -328,6 +341,28 @@ def _has_next_page(data: dict[str, Any]) -> bool:
     return False
 
 
+_DATES_KEY_MAP = {
+    "createdAt": "created_at",
+    "updatedAt": "updated_at",
+    "endsAt": "ends_at",
+    "rebouncedAt": "rebounced_at",
+}
+
+
+def _extract_dates(item: dict[str, Any]) -> dict[str, str]:
+    """Pull `item.dates` (createdAt/updatedAt/endsAt/rebouncedAt), slice each
+    ISO timestamp to YYYY-MM-DD. Returns dict keyed by the model field names."""
+    dates = item.get("dates")
+    if not isinstance(dates, dict):
+        return {}
+    out: dict[str, str] = {}
+    for src_key, dst_key in _DATES_KEY_MAP.items():
+        val = dates.get(src_key)
+        if isinstance(val, str) and len(val) >= 10:
+            out[dst_key] = val[:10]
+    return out
+
+
 def _publish_date_from_images(images: list[str]) -> datetime | None:
     """Best-effort date from Yad2 CDN image paths (layout varies by CDN version)."""
     patterns = (
@@ -398,6 +433,16 @@ def _apply_json_enrichment(listing: Listing, item: dict[str, Any]) -> None:
         desc = meta.get("description", "") or meta.get("text", "")
     if desc:
         listing.description = _html.unescape(desc.strip())
+
+    dates_block = _extract_dates(item)
+    if dates_block:
+        listing.created_at = dates_block.get("created_at", listing.created_at)
+        listing.updated_at = dates_block.get("updated_at", listing.updated_at)
+        listing.ends_at = dates_block.get("ends_at", listing.ends_at)
+        listing.rebounced_at = dates_block.get("rebounced_at", listing.rebounced_at)
+        if listing.created_at:
+            listing.publish_date = listing.created_at
+            listing.first_listed_date = listing.created_at
 
     in_prop = item.get("inProperty", {})
     if isinstance(in_prop, dict):
