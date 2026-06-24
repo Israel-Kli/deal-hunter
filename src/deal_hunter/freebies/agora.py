@@ -92,7 +92,9 @@ def fetch_items(
         category=category,
         subcategory=subcategory,
     )
-    html = fetch(url, headers=AGORA_HEADERS, as_json=False)
+    # agora.co.il blocks the default chrome120 TLS fingerprint from Azure IPs (403).
+    # Firefox impersonation passes through cleanly.
+    html = fetch(url, headers=AGORA_HEADERS, as_json=False, impersonate="firefox133")
     if not isinstance(html, str) or not html:
         log.warning("agora %s: empty/bad response", watch_label)
         return []
