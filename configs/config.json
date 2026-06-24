@@ -73,6 +73,7 @@
   "data_dir": "data",
   "freebies": {
     "enabled": true,
+    "interval_minutes": 5,
     "watches": [
       {
         "label": "מייבש גוש דן",

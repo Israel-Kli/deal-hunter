@@ -103,6 +103,7 @@ class FreebieWatchCfg(BaseModel):
 class FreebiesCfg(BaseModel):
     model_config = ConfigDict(extra="forbid")
     enabled: bool = False
+    interval_minutes: int = 180
     watches: list[FreebieWatchCfg] = Field(default_factory=list)
 
 

@@ -333,13 +333,6 @@ def run_once(cfg: cfg_mod.Config, *, enrich: bool = False, max_items: int | None
         except Exception:
             log.exception("gsheets sync failed")
 
-    if cfg.freebies.enabled:
-        try:
-            freebies_alerts = freebies_runner.run_once(cfg)
-            total_alerts += freebies_alerts
-        except Exception:
-            log.exception("freebies run failed")
-
     return total_alerts
 
 
@@ -347,6 +340,11 @@ def cmd_run(args: argparse.Namespace) -> int:
     cfg = cfg_mod.load(args.config)
     if args.once:
         run_once(cfg, enrich=args.enrich, max_items=args.max_items, source=getattr(args, 'source', None))
+        if cfg.freebies.enabled:
+            try:
+                freebies_runner.run_once(cfg)
+            except Exception:
+                log.exception("freebies run failed")
         return 0
 
     from apscheduler.schedulers.blocking import BlockingScheduler
@@ -376,6 +374,30 @@ def cmd_run(args: argparse.Namespace) -> int:
         replace_existing=True,
         max_instances=1,
     )
+
+    if cfg.freebies.enabled and cfg.freebies.watches:
+        free_interval = cfg.freebies.interval_minutes
+        free_jitter = min(30, max(5, free_interval * 60 // 10))
+
+        def _freebies_job() -> None:
+            try:
+                freebies_runner.run_once(cfg)
+            except Exception:
+                log.exception("freebies run failed")
+
+        scheduler.add_job(
+            _freebies_job,
+            trigger=IntervalTrigger(minutes=free_interval, jitter=free_jitter),
+            id="freebies-cycle",
+            name="Deal Hunter freebies cycle",
+            replace_existing=True,
+            max_instances=1,
+        )
+        log.info(
+            "Freebies scheduled: every %dm (jitter ±%ds, %d watch(es))",
+            free_interval, free_jitter, len(cfg.freebies.watches),
+        )
+
     try:
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):
