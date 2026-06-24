@@ -98,6 +98,7 @@ class FreebieWatchCfg(BaseModel):
     deal_type: int = 1
     category: int | None = None
     subcategory: int | None = None
+    title_must_contain: list[str] = Field(default_factory=list)
 
 
 class FreebiesCfg(BaseModel):

@@ -91,7 +91,8 @@
         "condition": 2,
         "deal_type": 1,
         "category": 2,
-        "subcategory": 20016
+        "subcategory": 20016,
+        "title_must_contain": ["קומותיים"]
       }
     ]
   }
