@@ -88,6 +88,24 @@ class AIMapperCfg(BaseModel):
     api_key_env: str = "GEMINI_API_KEY"
 
 
+class FreebieWatchCfg(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    label: str
+    source: str = "agora"
+    keyword: str
+    city: str
+    condition: int = 2
+    deal_type: int = 1
+    category: int | None = None
+    subcategory: int | None = None
+
+
+class FreebiesCfg(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = False
+    watches: list[FreebieWatchCfg] = Field(default_factory=list)
+
+
 class GSheetsCfg(BaseModel):
     model_config = ConfigDict(extra="forbid")
     enabled: bool = False
@@ -111,6 +129,7 @@ class Config(BaseModel):
     scoring: ScoringCfg = Field(default_factory=ScoringCfg)
     ai_mapper: AIMapperCfg = Field(default_factory=AIMapperCfg)
     gsheets: GSheetsCfg = Field(default_factory=GSheetsCfg)
+    freebies: FreebiesCfg = Field(default_factory=FreebiesCfg)
     dashboard_port: int = 8081
     dashboard_host: str = "127.0.0.1"
     data_dir: str = "data"

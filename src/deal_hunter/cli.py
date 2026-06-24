@@ -22,6 +22,7 @@ from deal_hunter.adapters.spectra import SpectraAdapter
 from deal_hunter.adapters.yad2 import Yad2Adapter
 from deal_hunter.ai_mapper import extract_batch as ai_extract_batch
 from deal_hunter.dedup.canonicalizer import CanonicalGroup, dedup_batch, load_existing_groups
+from deal_hunter.freebies import runner as freebies_runner
 from deal_hunter.models import Listing, ScanResult
 from deal_hunter.notify import telegram
 from deal_hunter.repo.listings_repo import ListingsRepo
@@ -332,6 +333,13 @@ def run_once(cfg: cfg_mod.Config, *, enrich: bool = False, max_items: int | None
         except Exception:
             log.exception("gsheets sync failed")
 
+    if cfg.freebies.enabled:
+        try:
+            freebies_alerts = freebies_runner.run_once(cfg)
+            total_alerts += freebies_alerts
+        except Exception:
+            log.exception("freebies run failed")
+
     return total_alerts
 
 
@@ -499,6 +507,15 @@ def cmd_comps_refresh(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_freebies(args: argparse.Namespace) -> int:
+    cfg = cfg_mod.load(args.config)
+    if not cfg.freebies.enabled:
+        log.warning("freebies disabled in config — nothing to do")
+        return 0
+    freebies_runner.run_once(cfg, seed_only=args.seed_only)
+    return 0
+
+
 def cmd_dashboard(args: argparse.Namespace) -> int:
     from deal_hunter.web.app import serve
 
@@ -578,6 +595,17 @@ def main() -> int:
 
     dash_p = sub.add_parser("dashboard", help="Serve the dashboard HTTP")
     dash_p.set_defaults(func=cmd_dashboard)
+
+    free_p = sub.add_parser("freebies", help="Run the freebies (agora.co.il) watcher once")
+    free_p.add_argument(
+        "--once", action="store_true",
+        help="Run one pass and exit (default; included for symmetry with `run`)",
+    )
+    free_p.add_argument(
+        "--seed-only", action="store_true",
+        help="Insert current items as already-alerted so the first scheduled run won't blast Telegram",
+    )
+    free_p.set_defaults(func=cmd_freebies)
 
     rescore_p = sub.add_parser("rescore", help="Re-score every listing in the DB without re-scraping")
     rescore_p.set_defaults(func=cmd_rescore)

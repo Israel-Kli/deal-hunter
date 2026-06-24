@@ -70,5 +70,28 @@
     "audit_max_entries": 20
   },
   "dashboard_port": 8081,
-  "data_dir": "data"
+  "data_dir": "data",
+  "freebies": {
+    "enabled": true,
+    "watches": [
+      {
+        "label": "מייבש גוש דן",
+        "source": "agora",
+        "keyword": "מייבש",
+        "city": "גוש דן והמרכז",
+        "condition": 2,
+        "deal_type": 1
+      },
+      {
+        "label": "מיטת קומותיים גוש דן",
+        "source": "agora",
+        "keyword": "מיטת קומותיים",
+        "city": "גוש דן והמרכז",
+        "condition": 2,
+        "deal_type": 1,
+        "category": 2,
+        "subcategory": 20016
+      }
+    ]
+  }
 }
