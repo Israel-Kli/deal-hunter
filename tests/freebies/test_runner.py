@@ -85,6 +85,41 @@ def test_seed_only_inserts_items_without_alerting(tmp_path, monkeypatch):
     assert sent2 == 0
 
 
+def test_title_must_contain_filters_loose_matches(tmp_path, monkeypatch):
+    """A watch with title_must_contain drops items whose title doesn't carry all required tokens."""
+    from deal_hunter.freebies import agora
+    from deal_hunter.freebies.models import FreebieItem
+
+    sample = [
+        FreebieItem(source="agora", source_id="1", watch_label="bunk", title="מיטת קומותיים", city="x", url="https://example/1"),
+        FreebieItem(source="agora", source_id="2", watch_label="bunk", title="מיטה זוגית", city="x", url="https://example/2"),
+        FreebieItem(source="agora", source_id="3", watch_label="bunk", title="מיטת יחיד 1+1", city="x", url="https://example/3"),
+    ]
+    monkeypatch.setattr(agora, "fetch_items", lambda **_: list(sample))
+    monkeypatch.setenv("DRY_RUN", "1")
+
+    cfg = cfg_mod.Config(
+        data_dir=str(tmp_path),
+        freebies=cfg_mod.FreebiesCfg(
+            enabled=True,
+            watches=[
+                cfg_mod.FreebieWatchCfg(
+                    label="bunk",
+                    keyword="מיטת קומותיים",
+                    city="גוש דן והמרכז",
+                    condition=2,
+                    title_must_contain=["קומותיים"],
+                ),
+            ],
+        ),
+    )
+    sent = runner.run_once(cfg)
+    assert sent == 1
+    with FreebiesRepo(Path(cfg.data_dir) / "deal-hunter.db") as repo:
+        rows = repo.conn.execute("SELECT source_id FROM freebie_items").fetchall()
+        assert [r[0] for r in rows] == ["1"]
+
+
 def test_disabled_freebies_short_circuits(tmp_path, monkeypatch):
     _patch_fetch(monkeypatch)
     cfg = cfg_mod.Config(

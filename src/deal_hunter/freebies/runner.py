@@ -18,7 +18,7 @@ def _fetch_for_watch(watch: cfg_mod.FreebieWatchCfg) -> list[FreebieItem]:
     if watch.source != "agora":
         log.warning("freebies: unknown source %r for watch %r — skipping", watch.source, watch.label)
         return []
-    return agora.fetch_items(
+    items = agora.fetch_items(
         watch_label=watch.label,
         keyword=watch.keyword,
         city=watch.city,
@@ -27,6 +27,17 @@ def _fetch_for_watch(watch: cfg_mod.FreebieWatchCfg) -> list[FreebieItem]:
         category=watch.category,
         subcategory=watch.subcategory,
     )
+    required = watch.title_must_contain
+    if required:
+        before = len(items)
+        items = [i for i in items if all(tok in i.title for tok in required)]
+        dropped = before - len(items)
+        if dropped:
+            log.info(
+                "freebies %s: dropped %d/%d items missing required tokens %s",
+                watch.label, dropped, before, required,
+            )
+    return items
 
 
 def run_once(cfg: cfg_mod.Config, *, seed_only: bool = False) -> int:
