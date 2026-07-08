@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Any
 
@@ -35,9 +36,24 @@ def fetch(
     merged = {**DEFAULT_HEADERS, **(headers or {})}
     last_err: Exception | None = None
     short = _shorten(url)
+
+    proxy_url = (
+        os.environ.get("HTTP_PROXY")
+        or os.environ.get("HTTPS_PROXY")
+        or os.environ.get("http_proxy")
+        or os.environ.get("https_proxy")
+    )
+    proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+
     for attempt in range(retries):
         try:
-            r = curl_requests.get(url, headers=merged, timeout=20, impersonate=impersonate)
+            r = curl_requests.get(
+                url,
+                headers=merged,
+                timeout=20,
+                impersonate=impersonate,
+                proxies=proxies,
+            )
             if r.status_code == 200:
                 body = r.text if not as_json else "(json)"
                 log.debug("fetch OK: %s -> %d (%s bytes) %s", short, r.status_code, len(r.content), body[:80] if isinstance(body, str) else body)
