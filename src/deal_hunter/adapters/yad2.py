@@ -26,6 +26,33 @@ BASE = "https://www.yad2.co.il"
 SALE_PAGE = f"{BASE}/realestate/forsale"
 ITEM_URL = f"{BASE}/item/{{}}"
 
+# Modern Yad2 API gateway. Serves clean JSON and — unlike www.yad2.co.il — is not
+# Radware-blocked from datacenter IPs, so it needs no build-id scrape and no cookies.
+GW_MAP = "https://gw.yad2.co.il/realestate-feed/forsale/map"
+GW_HEADERS = {"Origin": BASE, "Referer": f"{BASE}/"}
+
+
+def _num(v: Any) -> str:
+    """Render a numeric filter value without a spurious trailing .0 (gw wants 5, not 5.0)."""
+    f = float(v)
+    return str(int(f)) if f.is_integer() else str(f)
+
+
+def _split_bbox(lat_min: float, lon_min: float, lat_max: float, lon_max: float, n: int):
+    """Yield an n×n grid of (lat_min, lon_min, lat_max, lon_max) sub-boxes.
+
+    The gw map endpoint caps at ~200 markers per call and clusters dense areas, so
+    we tile the city box and de-dupe by token to enumerate every matching listing.
+    """
+    dlat = (lat_max - lat_min) / n
+    dlon = (lon_max - lon_min) / n
+    for i in range(n):
+        for j in range(n):
+            yield (
+                lat_min + i * dlat, lon_min + j * dlon,
+                lat_min + (i + 1) * dlat, lon_min + (j + 1) * dlon,
+            )
+
 AGENCY_KEYWORDS = [
     "תיווך", 'נדל"ן', "מתווך", "סוכנ", "נכסים",
     "אנגלו סכסון", "רימקס", "RE/MAX", "קולדוול", "century", "סנצ'ורי",
@@ -34,7 +61,7 @@ AGENCY_KEYWORDS = [
 
 class Yad2Adapter:
     source = "yad2"
-    enrich_always = True  # feed JSON lacks description; detail HTML has it
+    enrich_always = False  # gw map feed carries card fields; detail pages are WAF-blocked
 
     def __init__(self, cities: list[dict[str, Any]], search: dict[str, Any], *, max_pages: int = 10, request_delay_sec: float = 3.0):
         self.cities = cities
@@ -46,18 +73,84 @@ class Yad2Adapter:
     # ---- public ScraperAdapter surface ---------------------------------
 
     def fetch_feed(self, filters: SearchFilters) -> Iterable[Listing]:
-        bid = self._get_build_id()
-        if not bid:
-            return
         for city in self.cities:
-            yield from self._iter_city(bid, city)
+            yield from self._iter_city_gw(city)
+
+    def _filter_qs(self) -> str:
+        s = self.search
+        parts = [
+            f"minRooms={_num(s['rooms_min'])}",
+            f"maxRooms={_num(s['rooms_max'])}",
+            f"minPrice={_num(s['price_min'])}",
+            f"maxPrice={_num(s['price_max'])}",
+        ]
+        if s.get("min_sqm"):
+            parts.append(f"squareMeterMin={_num(s['min_sqm'])}")
+        return "&".join(parts)
+
+    def _iter_city_gw(self, city: dict[str, Any]) -> Iterable[Listing]:
+        region_id = city.get("yad2_region_id")
+        bbox = city.get("yad2_bbox") or ""
+        if not region_id or not bbox:
+            log.warning(
+                "Yad2 %s: missing yad2_region_id/yad2_bbox — skipping (gw feed needs them)",
+                city.get("name"),
+            )
+            return
+        try:
+            lat_min, lon_min, lat_max, lon_max = (float(x) for x in bbox.split(","))
+        except ValueError:
+            log.error(
+                "Yad2 %s: bad yad2_bbox %r (want lat_min,lon_min,lat_max,lon_max)",
+                city.get("name"), bbox,
+            )
+            return
+        tiles = max(1, int(city.get("yad2_tiles", 3) or 3))
+        qs = self._filter_qs()
+        seen: set[str] = set()
+        filter_stats: dict[str, int] = {}
+        emitted = 0
+        clusters_left = 0
+        for (la0, lo0, la1, lo1) in _split_bbox(lat_min, lon_min, lat_max, lon_max, tiles):
+            box = f"{la0:.5f},{lo0:.5f},{la1:.5f},{lo1:.5f}"
+            url = f"{GW_MAP}?region={region_id}&bBox={box}&zoom=16&{qs}"
+            data = fetch(url, headers=GW_HEADERS)
+            if not isinstance(data, dict):
+                continue
+            block = data.get("data", {}) or {}
+            markers = block.get("markers", []) or []
+            clusters_left += len(block.get("clusters", []) or [])
+            for raw in markers:
+                if not isinstance(raw, dict):
+                    continue
+                tok = raw.get("token")
+                if not tok or tok in seen:
+                    continue
+                seen.add(tok)
+                listing, reason = self._parse(raw, city)
+                if reason:
+                    filter_stats[reason] = filter_stats.get(reason, 0) + 1
+                if listing:
+                    emitted += 1
+                    yield listing
+            time.sleep(self.request_delay + random.uniform(0.3, 0.8))
+        log.info(
+            "Yad2 %s (gw): tiles=%d unique_markers=%d emitted=%d clusters=%d",
+            city.get("name"), tiles * tiles, len(seen), emitted, clusters_left,
+        )
+        if clusters_left:
+            log.warning(
+                "Yad2 %s (gw): %d cluster(s) unexpanded at zoom 16 — raise yad2_tiles for fuller coverage",
+                city.get("name"), clusters_left,
+            )
+        if filter_stats:
+            summary = ", ".join(f"{k}: {v}" for k, v in sorted(filter_stats.items(), key=lambda x: -x[1]))
+            log.info("Yad2 %s (gw) filter stats: %s", city.get("name"), summary)
 
     def fetch_detail(self, listing: Listing) -> Listing:
-        bid = self._get_build_id()
-        if not bid:
-            return listing
-        slug = listing.source_payload.get("_slug", self.cities[0].get("slug", "tel-aviv-area"))
-        self._enrich(listing, bid, slug)
+        # No-op: the gw map feed already carries every card field we score on.
+        # Descriptions live only on www.yad2.co.il item pages, which are Radware-
+        # blocked from datacenter IPs — so there is nothing to fetch here.
         return listing
 
     def fetch_detail_with_comps(self, listing: Listing) -> tuple[Listing, list[Comp]]:
