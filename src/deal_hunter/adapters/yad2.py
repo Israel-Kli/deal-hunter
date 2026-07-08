@@ -113,7 +113,7 @@ class Yad2Adapter:
         clusters_left = 0
         for (la0, lo0, la1, lo1) in _split_bbox(lat_min, lon_min, lat_max, lon_max, tiles):
             box = f"{la0:.5f},{lo0:.5f},{la1:.5f},{lo1:.5f}"
-            url = f"{GW_MAP}?region={region_id}&bBox={box}&zoom=16&{qs}"
+            url = f"{GW_MAP}?region={region_id}&bBox={box}&zoom=18&{qs}"
             data = fetch(url, headers=GW_HEADERS)
             if not isinstance(data, dict):
                 continue
@@ -139,8 +139,11 @@ class Yad2Adapter:
             city.get("name"), tiles * tiles, len(seen), emitted, clusters_left,
         )
         if clusters_left:
-            log.warning(
-                "Yad2 %s (gw): %d cluster(s) unexpanded at zoom 16 — raise yad2_tiles for fuller coverage",
+            # At zoom 18 the residual clusters are typically pins in neighbouring
+            # cities (dropped by the _parse city filter), not missed target-city
+            # listings. Kept at debug to avoid crying wolf every cycle.
+            log.debug(
+                "Yad2 %s (gw): %d cluster(s) left unexpanded (usually neighbouring-city pins)",
                 city.get("name"), clusters_left,
             )
         if filter_stats:
