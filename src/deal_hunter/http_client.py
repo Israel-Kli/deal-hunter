@@ -16,6 +16,15 @@ DEFAULT_HEADERS = {
     "Accept-Language": "he-IL,he;q=0.9,en;q=0.8",
 }
 
+# Per-host Cookie injection. Some sources (e.g. Yad2) sit behind a JS/WAF bot
+# challenge (Radware) that a plain HTTP client cannot pass. Workaround: solve the
+# challenge once in a real browser, copy the full Cookie request header, and put
+# it in the matching env var below. It is attached only to requests for that host
+# so cookies never leak cross-site.
+_COOKIE_ENV_BY_HOST = {
+    "yad2.co.il": "YAD2_COOKIES",
+}
+
 _URL_TRUNCATE = 150
 
 
@@ -36,6 +45,14 @@ def fetch(
     merged = {**DEFAULT_HEADERS, **(headers or {})}
     last_err: Exception | None = None
     short = _shorten(url)
+
+    for host, env_name in _COOKIE_ENV_BY_HOST.items():
+        if host in url:
+            cookie = os.environ.get(env_name)
+            if cookie:
+                merged.setdefault("Cookie", cookie.strip())
+                log.debug("fetch: attached %s cookie (%d chars) for %s", env_name, len(cookie), host)
+            break
 
     proxy_url = (
         os.environ.get("HTTP_PROXY")
