@@ -1,4 +1,4 @@
-"""Listings above floor 1 are filtered from the dashboard/sheets view."""
+"""Listings above floor 2 are filtered from the dashboard/sheets view."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def _listing(**kwargs) -> Listing:
     return Listing(**base)
 
 
-def test_all_for_dashboard_excludes_floor_above_1(tmp_path):
+def test_all_for_dashboard_excludes_floor_above_2(tmp_path):
     db = tmp_path / "t.db"
     with ListingsRepo(db) as repo:
         repo.upsert(_listing(source_id="g", floor=0))
@@ -32,4 +32,4 @@ def test_all_for_dashboard_excludes_floor_above_1(tmp_path):
         repo.upsert(_listing(source_id="nofloor", floor=None))
 
         ids = {row["source_id"] for row in repo.all_for_dashboard()}
-        assert ids == {"g", "f1", "nofloor"}
+        assert ids == {"g", "f1", "f2", "nofloor"}
