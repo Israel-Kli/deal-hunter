@@ -37,6 +37,11 @@ class CityCfg(BaseModel):
     hebrew_name: str = ""
     filter_areas: bool = False
     area_keywords: list[str] = Field(default_factory=list)
+    # Yad2 gw map-feed geo targeting (numeric region id + lat_min,lon_min,lat_max,lon_max box).
+    # tiles = n for an n×n grid split to avoid the endpoint's marker cap / clustering.
+    yad2_region_id: int = 0
+    yad2_bbox: str = ""
+    yad2_tiles: int = 3
 
 
 class SourcesCfg(BaseModel):
