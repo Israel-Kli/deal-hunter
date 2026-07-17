@@ -29,6 +29,10 @@ ITEM_URL = f"{BASE}/item/{{}}"
 # Modern Yad2 API gateway. Serves clean JSON and — unlike www.yad2.co.il — is not
 # Radware-blocked from datacenter IPs, so it needs no build-id scrape and no cookies.
 GW_MAP = "https://gw.yad2.co.il/realestate-feed/forsale/map"
+# Per-token detail. The map feed's markers omit dates + free-text description;
+# this endpoint carries item.dates (created/updated/ends/rebounced), the Hebrew
+# ad body, and structured inProperty amenity flags. Also gw = not Radware-blocked.
+GW_ITEM = "https://gw.yad2.co.il/realestate-item/{}"
 GW_HEADERS = {"Origin": BASE, "Referer": f"{BASE}/"}
 
 
@@ -61,7 +65,7 @@ AGENCY_KEYWORDS = [
 
 class Yad2Adapter:
     source = "yad2"
-    enrich_always = False  # gw map feed carries card fields; detail pages are WAF-blocked
+    enrich_always = True  # map markers omit dates + description; fetch_detail fills them from the gw item endpoint
 
     def __init__(self, cities: list[dict[str, Any]], search: dict[str, Any], *, max_pages: int = 10, request_delay_sec: float = 3.0):
         self.cities = cities
@@ -151,9 +155,24 @@ class Yad2Adapter:
             log.info("Yad2 %s (gw) filter stats: %s", city.get("name"), summary)
 
     def fetch_detail(self, listing: Listing) -> Listing:
-        # No-op: the gw map feed already carries every card field we score on.
-        # Descriptions live only on www.yad2.co.il item pages, which are Radware-
-        # blocked from datacenter IPs — so there is nothing to fetch here.
+        """Enrich from the gw item endpoint. The map markers this adapter feeds on
+        omit dates + description, so fill them here (plus structured amenity flags).
+        gw is not Radware-blocked, so — unlike www item pages — this works from a
+        datacenter IP with no cookies. Mutates and returns `listing`."""
+        token = listing.source_id
+        if not token:
+            return listing
+        time.sleep(random.uniform(0.4, 0.9))  # be polite; runs once per surviving listing
+        data = fetch(GW_ITEM.format(token), headers=GW_HEADERS)
+        item = data.get("data") if isinstance(data, dict) else None
+        if isinstance(item, dict):
+            _apply_gw_item(listing, item)
+            log.debug(
+                "Yad2 enrich gw-item ok: token=%s desc_len=%d created=%s",
+                token, len(listing.description or ""), listing.created_at or "-",
+            )
+        else:
+            log.debug("Yad2 enrich gw-item: no data for token=%s", token)
         return listing
 
     def fetch_detail_with_comps(self, listing: Listing) -> tuple[Listing, list[Comp]]:
@@ -515,6 +534,73 @@ def _extract_item_from_json(data: Any) -> dict[str, Any] | None:
     if data.get("token") or data.get("description"):
         return data
     return None
+
+
+def _gw_item_description(item: dict[str, Any]) -> str:
+    """Pick the real free-text ad body from a gw item.
+
+    Usually it's `metaData.description`. But for some ads that field holds a short
+    auto-generated SEO string (e.g. "מכירה, דירה, קומה 5, אור יהודה") and the real
+    body sits in `furnitureInfo`. The real body is invariably the longest of the
+    candidates, so take the longest non-empty one.
+    """
+    meta = item.get("metaData", {}) or {}
+    candidates = (
+        item.get("furnitureInfo"),
+        meta.get("description"),
+        item.get("description"),
+    )
+    best = max(
+        (c.strip() for c in candidates if isinstance(c, str)),
+        key=len,
+        default="",
+    )
+    return _html.unescape(best) if best else ""
+
+
+def _apply_gw_item(listing: Listing, item: dict[str, Any]) -> None:
+    """Enrich a Listing in place from a gw /realestate-item/{token} `data` object.
+
+    Fills the fields the map-markers feed can't: dates, the Hebrew description, and
+    structured amenity flags (more reliable than tag/keyword guessing). Amenity
+    flags are only ever flipped on — never cleared — so a marker-derived True wins.
+    """
+    desc = _gw_item_description(item)
+    if desc:
+        listing.description = desc
+
+    dates_block = _extract_dates(item)
+    if dates_block:
+        listing.created_at = dates_block.get("created_at", listing.created_at)
+        listing.updated_at = dates_block.get("updated_at", listing.updated_at)
+        listing.ends_at = dates_block.get("ends_at", listing.ends_at)
+        listing.rebounced_at = dates_block.get("rebounced_at", listing.rebounced_at)
+        if listing.created_at:
+            listing.publish_date = listing.created_at
+            listing.first_listed_date = listing.created_at
+
+    in_prop = item.get("inProperty", {})
+    if isinstance(in_prop, dict):
+        if in_prop.get("includeElevator"):       listing.elevator = True
+        if in_prop.get("includeParking"):        listing.parking = True
+        if in_prop.get("includeSecurityRoom"):   listing.mamad = True
+        if in_prop.get("includeBalcony"):        listing.balcony = True
+        if in_prop.get("includeAirconditioner"): listing.ac = True
+        if in_prop.get("isRenovated"):           listing.renovated = True
+
+    ad = item.get("additionalDetails", {}) or {}
+    if (ad.get("parkingSpacesCount") or 0) > 0:
+        listing.parking = True
+    if (ad.get("balconiesCount") or 0) > 0:
+        listing.balcony = True
+    if not listing.sqm_build and ad.get("squareMeterBuild"):
+        listing.sqm_build = ad.get("squareMeterBuild")
+        size = listing.sqm_build or listing.sqm
+        if listing.price and size:
+            listing.price_per_sqm = round(listing.price / size)
+
+    if listing.year_built is None:
+        listing.year_built = extract_year_built(listing.description)
 
 
 def _apply_json_enrichment(listing: Listing, item: dict[str, Any]) -> None:
