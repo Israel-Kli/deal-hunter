@@ -30,7 +30,7 @@
     "reariel": false,
     "spectra": false,
     "nadlanh": false,
-    "simplestate": true,
+    "simplestate": false,
     "komo": true
   },
   "comps": {
@@ -82,17 +82,6 @@
         "city": "גוש דן והמרכז",
         "condition": 2,
         "deal_type": 1
-      },
-      {
-        "label": "מיטת קומותיים גוש דן",
-        "source": "agora",
-        "keyword": "מיטת קומותיים",
-        "city": "גוש דן והמרכז",
-        "condition": 2,
-        "deal_type": 1,
-        "category": 2,
-        "subcategory": 20016,
-        "title_must_contain": ["קומותיים"]
       }
     ]
   }
