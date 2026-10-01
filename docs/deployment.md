@@ -1,4 +1,4 @@
-# Azure Deployment Plan — Standard B2ats v2 (2 vCPU, 1 GiB RAM)
+# Deal Hunter Deployment Plan — systemd + venv (Azure origin, now AWS EC2)
 
 ## Architecture Decision: systemd + venv (no Docker)
 
@@ -8,6 +8,25 @@ We run directly on the host with:
 - Python 3.11+ venv
 - systemd service for process management (auto-restart, logging, health)
 - SQLite on local disk (already in `data/`)
+
+---
+
+## Current Production Host (AWS EC2, replaces the Azure VM)
+
+The Azure VM described below stopped working and was replaced by an AWS EC2
+instance (Amazon Linux 2023, 2 vCPU, 2 GiB RAM + 2 GiB swap, il-central-1):
+
+- **SSH**: `ssh aws-ec2` → `51.85.56.244` (user `ec2-user`, key-based)
+- **Path**: `/opt/deal-hunter`, dedicated `deal-hunter` user
+- **Python**: 3.14.7 prebuilt at `/opt/py314`; the venv is built from it
+  (`/opt/py314/bin/python3 -m venv .venv`). Amazon Linux ships only Python 3.9,
+  too old for the pinned pandas/numpy — the Ubuntu deadsnakes steps below are
+  the Azure equivalent
+- **Packages**: `dnf`, not `apt`; nothing extra is needed on this box — the
+  venv interpreter and pure-wheel deps cover everything
+- **Firewall**: EC2 security group (not an Azure NSG) — allow inbound TCP 8081
+- **Repo**: public, so `git clone https://github.com/Israel-Kli/deal-hunter.git`
+  works without a deploy key
 
 ---
 
@@ -50,8 +69,12 @@ sudo sysctl -p /etc/sysctl.d/99-swappiness.conf
 ```bash
 mkdir -p /opt/deal-hunter
 cd /opt/deal-hunter
-git clone <repo-url> .
+git clone https://github.com/Israel-Kli/deal-hunter.git .
 ```
+
+The repo is public, so HTTPS clone works without credentials. If cloning as the
+dedicated user instead of root, create the user first (step 8) and run
+`sudo -u deal-hunter git clone https://github.com/Israel-Kli/deal-hunter.git .`.
 
 ### 5. Create venv + Install
 
@@ -67,17 +90,24 @@ python3.12 -m venv .venv
 cp configs/config.example.json configs/config.json
 ```
 
-Edit `configs/config.json`:
+Edit `configs/config.json` (gitignored, not in the repo):
 
-- `sources.yad2`: `true`
-- `sources.onmap`: `true` (or `false` to save memory)
-- `sources.ad`: `true`
-- `schedule.poll_interval_minutes`: `60`
-- `schedule.delay_between_requests_sec`: `3.0`
-- `notifications.telegram_bot_token` / `chat_id`: your values
-- `scoring.alert_threshold`: `7.0`
+- `cities` — one entry per city: `name`, `slug` + `yad2_id`/`yad2_area`/`yad2_region`
+  (Yad2 feed), `onmap_slug`, `hebrew_name`. Optional Yad2 gw geo-targeting:
+  `yad2_region_id`, `yad2_bbox`, `yad2_tiles`
+- `sources` — per-scraper toggles: `yad2`, `madlan`, `onmap`, `ad`, `reariel`,
+  `spectra`, `nadlanh`, `simplestate`, `komo`
+- `comps` — `yad2_deals`, `nadlan_gov` (both currently non-functional from cloud IPs)
+- `schedule.poll_interval_minutes` / `delay_between_requests_sec` / `max_pages`
+- `notifications` — `telegram_bot_token` / `chat_id` (leave empty to disable)
+- `scoring.alert_threshold` — `7.0`
+- `gsheets` — `enabled`, `sheet_id`, `credentials_path`, `tab_name`,
+  `archive_tab_name` (needs a service-account key, step 7)
+- `ai_mapper` — `enabled` (Gemini enrichment; expects the key in `GEMINI_API_KEY`)
+- `freebies` — agora.co.il keyword watches (`enabled`, `interval_minutes`, `watches`)
+- `dashboard_host` — `"0.0.0.0"` for external dashboard access
 
-### 7. Secrets (env file)
+### 7. Secrets (env file + Google key)
 
 ```bash
 cat > /opt/deal-hunter/.env << 'EOF'
@@ -86,6 +116,11 @@ TELEGRAM_CHAT_ID=<your-chat-id>
 EOF
 chmod 600 /opt/deal-hunter/.env
 ```
+
+If `gsheets.enabled` is `true`, also upload the service-account JSON to the repo
+root as `credentials.json` (the `credentials_path` default), chown it to the app
+user and `chmod 600`. Create the key under Google Cloud → IAM → Service Accounts
+and share the target spreadsheet with the service-account email (Editor).
 
 ---
 
@@ -147,30 +182,55 @@ journalctl -u deal-hunter -f --no-pager
 
 ### 11. Bind to 0.0.0.0
 
-The dashboard `serve()` function defaults to `127.0.0.1`. We need it to listen on all interfaces.
+`dashboard_host` already exists in `src/deal_hunter/config.py` (default
+`"127.0.0.1"`) and `cmd_dashboard` in `cli.py` already passes it to `serve()`.
+No code changes needed — just set it in `configs/config.json`:
 
-**Option A (recommended)**: Add `dashboard_host` to config.
-
-In `src/deal_hunter/config.py`, add to `Config`:
-```python
-dashboard_host: str = "0.0.0.0"
+```json
+"dashboard_host": "0.0.0.0",
+"dashboard_port": 8081
 ```
 
-In `src/deal_hunter/cli.py`, update `cmd_dashboard`:
-```python
-def cmd_dashboard(args: argparse.Namespace) -> int:
-    from deal_hunter.web.app import serve
-    cfg = cfg_mod.load(args.config)
-    serve(cfg, host=cfg.dashboard_host)
-    return 0
+### 12. Dashboard systemd Unit
+
+The scraper service (step 9) does not serve the dashboard; that is a separate
+process. Create `/etc/systemd/system/deal-hunter-dashboard.service`:
+
+```ini
+[Unit]
+Description=Deal Hunter Dashboard (port 8081)
+After=network.target
+
+[Service]
+Type=simple
+User=deal-hunter
+Group=deal-hunter
+WorkingDirectory=/opt/deal-hunter
+Environment=PATH=/opt/deal-hunter/.venv/bin:/usr/bin
+EnvironmentFile=/opt/deal-hunter/.env
+ExecStart=/opt/deal-hunter/.venv/bin/deal-hunter dashboard
+Restart=on-failure
+RestartSec=10
+
+MemoryMax=300M
+MemorySwapMax=1G
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=deal-hunter-dashboard
+
+[Install]
+WantedBy=multi-user.target
 ```
 
-**Option B (quick)**: Change the default in `app.py`:
-```python
-def serve(cfg: Config, host: str = "0.0.0.0") -> None:
+Enable + start both units:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now deal-hunter deal-hunter-dashboard
 ```
 
-### 12. Azure NSG Rule
+### 13. Firewall Rule (Azure NSG / EC2 security group)
 
 - **Inbound rule**: allow TCP port `8081` from your IP (or `0.0.0.0/0` for anywhere)
 - No other ports need to be open
@@ -179,7 +239,7 @@ def serve(cfg: Config, host: str = "0.0.0.0") -> None:
 
 ## Phase 5: Verification
 
-### 13. Smoke Test
+### 14. Smoke Test
 
 ```bash
 # Check service is running
@@ -196,7 +256,7 @@ curl http://<vm-public-ip>:8081/api/listings | python3 -m json.tool | head -20
 journalctl -u deal-hunter --since "5 min ago" | grep "scan "
 ```
 
-### 14. Memory Monitoring (first 24h)
+### 15. Memory Monitoring (first 24h)
 
 ```bash
 watch -n 5 'free -m && echo "---" && ps aux | grep deal-hunter | grep -v grep'
@@ -206,7 +266,7 @@ watch -n 5 'free -m && echo "---" && ps aux | grep deal-hunter | grep -v grep'
 
 ## Phase 6: Ongoing Ops
 
-### 15. Log Rotation
+### 16. Log Rotation
 
 Cap systemd journal to 100 MB:
 
@@ -216,7 +276,7 @@ SystemMaxUse=100M
 sudo systemctl restart systemd-journald
 ```
 
-### 16. Code Updates
+### 17. Code Updates
 
 ```bash
 cd /opt/deal-hunter
@@ -225,7 +285,7 @@ git pull
 sudo systemctl restart deal-hunter
 ```
 
-### 17. DB Backup (optional, cron)
+### 18. DB Backup (optional, cron)
 
 ```bash
 # /etc/cron.d/deal-hunter-backup

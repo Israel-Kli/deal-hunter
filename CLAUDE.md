@@ -25,7 +25,7 @@ src/deal_hunter/
 
 ## Key Design Decisions
 
-- **No Docker on Azure VM** — 1 GiB RAM too tight; uses systemd + venv directly
+- **No Docker on the VM** — the 1 GiB Azure VM was too tight; systemd + venv directly
 - **SQLite** — single-file DB in `data/deal-hunter.db`
 - **stdlib HTTP server** — dashboard uses `http.server`, no Flask/FastAPI dependency
 - **APScheduler** — blocking scheduler for periodic scan cycles with jitter
@@ -45,38 +45,40 @@ Market bands defined in `scoring/heuristic.py:MARKET_REFS`. Add new cities here.
 
 ## Deployment
 
-Azure VM (Standard B2ats v2, 2 vCPU, 1 GiB RAM, Ubuntu 22.04):
-- **IP**: `REMOVED-IP`
-- **SSH**: `ssh azure-test` (key-based via `~/.ssh/config`)
-- **Path**: `/opt/deal-hunter`
+AWS EC2 (Amazon Linux 2023, 2 vCPU, 2 GiB RAM + 2 GiB swap, il-central-1):
+- **IP**: `51.85.56.244`
+- **SSH**: `ssh aws-ec2` (key-based via `~/.ssh/config`)
+- **Path**: `/opt/deal-hunter`, dedicated `deal-hunter` user
+- **Python**: 3.14.7 prebuilt at `/opt/py314`; the venv is built from it
 - **Services**: `deal-hunter` (scraper), `deal-hunter-dashboard` (port 8081)
-- **Swap**: 2GB, swappiness=10
-- **Memory limit**: `MemoryMax=800M` cgroup
+- **Memory limits**: scraper `MemoryMax=800M`, dashboard `MemoryMax=300M`
+
+This replaced the previous Azure VM after it stopped working; the migration
+followed `docs/deployment.md`.
 
 ### SSH Access
 
 Key-based auth configured in `~/.ssh/config`:
 ```
-Host azure-test
-    HostName REMOVED-IP
-    User REMOVED
-    IdentityFile ~/.ssh/azure_test
-    StrictHostKeyChecking no
+Host aws-ec2
+    HostName 51.85.56.244
+    User ec2-user
+    IdentityFile ~/.ssh/azure_il
 ```
-Backup password: `REMOVED`
 
 ### Config
 
-`configs/config.json` on VM controls:
+`configs/config.json` on the VM controls:
 - `search` — filters (rooms, price, sqm, property_types)
-- `cities` — which cities to scrape (city_code + slug for Yad2 URL)
-- `sources` — enable/disable scrapers
+- `cities` — which cities to scrape (Yad2 id/slug, onmap slug, Hebrew name)
+- `sources` — enable/disable scrapers (yad2, onmap, ad, komo, …)
 - `schedule` — poll interval, request delay, max pages
+- `gsheets` / `freebies` / `ai_mapper` — sheet sync, agora watches, Gemini enrichment
 - `dashboard_host` — bind address (0.0.0.0 for external access)
 
-### Update Flow (local → Azure, no DB reset)
+### Update Flow (local → VM, no DB reset)
 
-After **any code or template change** you want live on the VM: commit and push from your dev machine, then pull on Azure and restart services. This updates the running app only; it does **not** touch `data/deal-hunter.db` (avoid `/api/reset` and avoid deleting the DB as part of deploy).
+After **any code or template change** you want live on the VM: commit and push from your dev machine, then pull on the VM and restart services. This updates the running app only; it does **not** touch `data/deal-hunter.db` (avoid `/api/reset` and avoid deleting the DB as part of deploy).
 
 **1. Locally (from the repo root)**
 
@@ -86,43 +88,47 @@ git commit -m "Describe the change"
 git push origin main       # or your branch, then merge to main as you prefer
 ```
 
-**2. On the Azure VM (install step only if `pyproject.toml` / deps changed)**
+**2. On the VM (install step only if `pyproject.toml` / deps changed)**
 
 ```bash
-ssh azure-test "cd /opt/deal-hunter && git pull && .venv/bin/pip install -e . --quiet && sudo systemctl restart deal-hunter deal-hunter-dashboard"
+ssh aws-ec2 "sudo -u deal-hunter git -C /opt/deal-hunter pull --ff-only origin main && sudo -u deal-hunter bash -c 'cd /opt/deal-hunter && .venv/bin/python -m pip install -e . --quiet' && sudo systemctl restart deal-hunter deal-hunter-dashboard"
 ```
 
 If dependencies did not change, you can skip the install:
 
 ```bash
-ssh azure-test "cd /opt/deal-hunter && git pull && sudo systemctl restart deal-hunter deal-hunter-dashboard"
+ssh aws-ec2 "sudo -u deal-hunter git -C /opt/deal-hunter pull --ff-only origin main && sudo systemctl restart deal-hunter deal-hunter-dashboard"
 ```
+
+The git checkout is owned by the `deal-hunter` user, so pulls run via
+`sudo -u deal-hunter git -C /opt/deal-hunter`. The repo is public, so no deploy
+key is needed.
 
 **3. Agent / automation convention**
 
-Whenever changes are merged to the branch the VM tracks: **push → pull on Azure → restart** both units so the dashboard and scraper load the new code. Do not deploy by restarting alone without `git pull` on the server.
+Whenever changes are merged to the branch the VM tracks: **push → pull on VM → restart** both units so the dashboard and scraper load the new code. Do not deploy by restarting alone without `git pull` on the server.
 
 ### Useful Commands
 
 ```bash
 # Check services
-ssh azure-test "sudo systemctl status deal-hunter deal-hunter-dashboard"
+ssh aws-ec2 "sudo systemctl status deal-hunter deal-hunter-dashboard"
 
 # View scraper logs
-ssh azure-test "journalctl -u deal-hunter -f --no-pager"
+ssh aws-ec2 "sudo journalctl -u deal-hunter -f --no-pager"
 
 # Trigger manual scan
-ssh azure-test "cd /opt/deal-hunter && sudo -u deal-hunter bash -c 'source .env && .venv/bin/deal-hunter run --once --max-items 30'"
+ssh aws-ec2 "sudo -u deal-hunter bash -c 'cd /opt/deal-hunter && .venv/bin/deal-hunter run --once --max-items 30'"
 
-# Dashboard via SSH tunnel (if NSG not open)
-ssh -L 8081:localhost:8081 azure-test
+# Dashboard via SSH tunnel (if the security group is closed)
+ssh -L 8081:localhost:8081 aws-ec2
 # Then open http://localhost:8081
 ```
 
 ## Comps Status
 
-Both comps sources are currently non-functional on Azure:
-- **nadlan_gov** — SSL handshake failure (Israeli gov APIs block Azure IPs)
+Both comps sources are disabled in the live config (`nadlan_gov: false`):
+- **nadlan_gov** — SSL handshake failure from cloud IPs (Israeli gov APIs blocked Azure IPs)
 - **yad2_deals** — Deals table requires JS rendering (not in SSR HTML)
 
 Scoring falls back to `MARKET_REFS` bands. `fair_price_estimate` is always `None`.

@@ -4,16 +4,16 @@
 
 ```bash
 # Local development
-cd /Users/user/github/deal-hunter
+cd /Users/user/github/kli/deal-hunter
 .venv/bin/deal-hunter run --once --max-items 10   # quick smoke test
 .venv/bin/deal-hunter run --once --enrich          # with detail-page enrichment (slower)
 .venv/bin/deal-hunter dashboard                     # serve UI at http://127.0.0.1:8081
-
-# Docker (production)
-cp .env.example .env   # edit with your Telegram tokens
-docker compose up -d
-docker compose logs -f hunter
 ```
+
+Production runs on the VM as two systemd units (see `docs/deployment.md`):
+the `deal-hunter` scraper and the `deal-hunter-dashboard` server. No Docker on
+the VM. A `docker-compose.yml` still exists for local container runs, but it is
+not the production path.
 
 ## Architecture
 
@@ -53,10 +53,10 @@ Edit `configs/config.json` (gitignored). Key sections:
 
 ### Changing filters without rebuild
 
-Just edit `configs/config.json` and restart the container. No rebuild needed:
+Edit `configs/config.json` on the VM and restart the scraper. No rebuild needed:
 
 ```bash
-docker compose restart hunter
+ssh aws-ec2 "sudo systemctl restart deal-hunter"
 ```
 
 ### Adding a new source
