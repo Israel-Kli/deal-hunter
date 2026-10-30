@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 
-FreebieSource = Literal["agora"]
+FreebieSource = Literal["agora", "facebook"]
 
 
 class FreebieItem(BaseModel):

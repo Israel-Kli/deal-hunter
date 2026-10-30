@@ -104,7 +104,9 @@ Edit `configs/config.json` (gitignored, not in the repo):
 - `gsheets` — `enabled`, `sheet_id`, `credentials_path`, `tab_name`,
   `archive_tab_name` (needs a service-account key, step 7)
 - `ai_mapper` — `enabled` (Gemini enrichment; expects the key in `GEMINI_API_KEY`)
-- `freebies` — agora.co.il keyword watches (`enabled`, `interval_minutes`, `watches`)
+- `freebies` — agora.co.il keyword watches (`enabled`, `interval_minutes`, `watches`);
+  `freebies.facebook` (`enabled`, `scrolls`, `groups`, `topics`) is run by the
+  `deal-hunter-facebook.timer` unit, see "Facebook groups" below
 - `dashboard_host` — `"0.0.0.0"` for external dashboard access
 
 ### 7. Secrets (env file + Google key)
@@ -329,6 +331,58 @@ journalctl -u deal-hunter -n 100 --no-pager
 cd /opt/deal-hunter
 .venv/bin/deal-hunter run --once --max-items 5
 ```
+
+### Facebook groups (optional)
+
+Uses headless Chromium with the cookies of a secondary account that is a member of
+the groups. It runs as its own oneshot unit so Chromium's memory is not charged to
+the scraper's cgroup.
+
+```bash
+sudo -u deal-hunter bash -c 'cd /opt/deal-hunter && .venv/bin/python -m pip install -e ".[playwright]" --quiet \
+  && PLAYWRIGHT_BROWSERS_PATH=/opt/deal-hunter/.pw .venv/bin/python -m playwright install chromium-headless-shell'
+sudo dnf install -y atk at-spi2-atk cups-libs libXcomposite libXdamage libXrandr libXfixes \
+  libxkbcommon mesa-libgbm pango cairo alsa-lib nss nspr libdrm at-spi2-core liberation-fonts
+echo 'FACEBOOK_COOKIES="<Cookie header of a facebook.com request>"' | sudo -u deal-hunter tee -a /opt/deal-hunter/.env
+```
+
+`/etc/systemd/system/deal-hunter-facebook.service`:
+
+```ini
+[Unit]
+Description=Deal Hunter - Facebook groups freebies scan
+
+[Service]
+Type=oneshot
+User=deal-hunter
+Group=deal-hunter
+WorkingDirectory=/opt/deal-hunter
+Environment=PLAYWRIGHT_BROWSERS_PATH=/opt/deal-hunter/.pw
+EnvironmentFile=/opt/deal-hunter/.env
+ExecStart=/opt/deal-hunter/.venv/bin/deal-hunter facebook
+TimeoutStartSec=15min
+MemoryMax=900M
+SyslogIdentifier=deal-hunter-facebook
+```
+
+`/etc/systemd/system/deal-hunter-facebook.timer`:
+
+```ini
+[Unit]
+Description=Run the Deal Hunter Facebook scan every 15 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=15min
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target
+```
+
+`sudo systemctl daemon-reload && sudo systemctl enable --now deal-hunter-facebook.timer`.
+When the cookies expire the unit fails and sends one Telegram warning; re-export
+`FACEBOOK_COOKIES` and the next run re-arms it.
 
 ### Dashboard Not Reachable
 

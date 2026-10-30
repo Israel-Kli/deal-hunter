@@ -106,11 +106,33 @@ class FreebieWatchCfg(BaseModel):
     title_must_contain: list[str] = Field(default_factory=list)
 
 
+class FacebookGroupCfg(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    label: str = ""
+
+
+class FacebookTopicCfg(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    label: str
+    # Case-insensitive regexes; a post matches the topic if any of them matches its text.
+    patterns: list[str]
+
+
+class FacebookCfg(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = False
+    scrolls: int = 3
+    groups: list[FacebookGroupCfg] = Field(default_factory=list)
+    topics: list[FacebookTopicCfg] = Field(default_factory=list)
+
+
 class FreebiesCfg(BaseModel):
     model_config = ConfigDict(extra="forbid")
     enabled: bool = False
     interval_minutes: int = 180
     watches: list[FreebieWatchCfg] = Field(default_factory=list)
+    facebook: FacebookCfg = Field(default_factory=FacebookCfg)
 
 
 class GSheetsCfg(BaseModel):

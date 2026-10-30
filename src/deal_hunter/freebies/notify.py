@@ -3,6 +3,7 @@ against the real-estate Listing model."""
 
 from __future__ import annotations
 
+import html
 import logging
 import os
 import time
@@ -15,10 +16,10 @@ log = logging.getLogger(__name__)
 
 
 def _fmt(item: FreebieItem) -> str:
-    lines = [f"🆕 <b>{item.title}</b>"]
+    lines = [f"🆕 <b>{html.escape(item.title)}</b>"]
     if item.city:
-        lines.append(f"📍 {item.city}")
-    lines.append(f"🔍 {item.watch_label}")
+        lines.append(f"📍 {html.escape(item.city)}")
+    lines.append(f"🔍 {html.escape(item.watch_label)}")
     lines.append(f"🔗 <a href=\"{item.url}\">צפה במודעה</a>")
     return "\n".join(lines)
 
@@ -54,3 +55,18 @@ def send(items: list[FreebieItem], *, bot_token: str, chat_id: str, limit: int =
         except Exception as e:
             log.warning("telegram freebies send error: %s", e)
     return sent
+
+
+def send_text(text: str, *, bot_token: str, chat_id: str) -> None:
+    """Plain operational message (e.g. an expired Facebook session)."""
+    if os.environ.get("DRY_RUN") == "1":
+        log.info("[DRY_RUN telegram freebies] %s", text)
+        return
+    if not bot_token or not chat_id:
+        log.warning("telegram disabled: missing token or chat_id")
+        return
+    requests.post(
+        f"https://api.telegram.org/bot{bot_token}/sendMessage",
+        json={"chat_id": chat_id, "text": text},
+        timeout=10,
+    )

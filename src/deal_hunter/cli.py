@@ -529,6 +529,12 @@ def cmd_comps_refresh(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_facebook(args: argparse.Namespace) -> int:
+    cfg = cfg_mod.load(args.config)
+    freebies_runner.run_facebook_once(cfg, seed_only=args.seed_only)
+    return 0
+
+
 def cmd_freebies(args: argparse.Namespace) -> int:
     cfg = cfg_mod.load(args.config)
     if not cfg.freebies.enabled:
@@ -628,6 +634,13 @@ def main() -> int:
         help="Insert current items as already-alerted so the first scheduled run won't blast Telegram",
     )
     free_p.set_defaults(func=cmd_freebies)
+
+    fb_p = sub.add_parser("facebook", help="Scan the configured Facebook groups once (needs FACEBOOK_COOKIES)")
+    fb_p.add_argument(
+        "--seed-only", action="store_true",
+        help="Record current matches as already-alerted so the first run won't blast Telegram",
+    )
+    fb_p.set_defaults(func=cmd_facebook)
 
     rescore_p = sub.add_parser("rescore", help="Re-score every listing in the DB without re-scraping")
     rescore_p.set_defaults(func=cmd_rescore)
