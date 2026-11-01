@@ -20,7 +20,7 @@ def _fmt(item: FreebieItem) -> str:
     if item.city:
         lines.append(f"📍 {html.escape(item.city)}")
     lines.append(f"🔍 {html.escape(item.watch_label)}")
-    lines.append(f"🔗 <a href=\"{item.url}\">צפה במודעה</a>")
+    lines.append(html.escape(item.url))
     return "\n".join(lines)
 
 

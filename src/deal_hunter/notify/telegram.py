@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 import os
 import time
@@ -26,7 +27,7 @@ def _fmt(listing: Listing) -> str:
         f"{fair_line}\n"
         f"🛏 {listing.rooms or '?'} חד׳ | 📐 {listing.sqm or '?'}מ\"ר | קומה {listing.floor if listing.floor is not None else '?'}\n"
         f"🏷 מקור: {listing.source}\n"
-        f"🔗 <a href=\"{listing.url}\">צפה במקור</a>"
+        f"{html.escape(listing.url)}"
     )
 
 
