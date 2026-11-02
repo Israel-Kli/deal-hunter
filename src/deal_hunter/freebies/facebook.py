@@ -123,7 +123,13 @@ def collect_group_posts(
                 else route.continue_(),
             )
             for group_id in group_ids:
-                out[group_id] = _scrape_group(ctx, group_id, scrolls=scrolls, pause_sec=pause_sec)
+                posts = _scrape_group(ctx, group_id, scrolls=scrolls, pause_sec=pause_sec)
+                if not posts:
+                    # Facebook occasionally serves a feed with no stories under load.
+                    log.warning("facebook %s: no posts, retrying once", group_id)
+                    time.sleep(random.uniform(5, 10))
+                    posts = _scrape_group(ctx, group_id, scrolls=scrolls, pause_sec=pause_sec)
+                out[group_id] = posts
                 # Spread requests out; fixed-rate polling of many groups looks automated.
                 time.sleep(random.uniform(3, 8))
         finally:
