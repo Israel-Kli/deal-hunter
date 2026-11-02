@@ -124,7 +124,11 @@ def run_facebook_once(cfg: cfg_mod.Config, *, seed_only: bool = False) -> int:
     auth_marker = data_dir / "facebook_auth_alerted"
     labels = {g.id: g.label or g.id for g in fb.groups}
     try:
-        by_group = facebook.collect_group_posts([g.id for g in fb.groups], scrolls=fb.scrolls)
+        by_group = facebook.collect_group_posts(
+            [g.id for g in fb.groups],
+            scrolls=fb.scrolls,
+            state_path=data_dir / "facebook_state.json",
+        )
     except facebook.FacebookAuthError as e:
         log.error("facebook: session not logged in: %s", e)
         if not auth_marker.exists():

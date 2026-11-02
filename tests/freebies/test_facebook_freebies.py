@@ -46,3 +46,13 @@ def test_match_topics_hebrew_russian_english() -> None:
     assert match_topics("מוסר את המקרר", topics) == ["מקרר"]
     assert match_topics("Отдам холодильник и стол", topics) == ["מקרר", "שולחן"]
     assert match_topics("отдам столько вещей", topics) == []
+
+
+def test_state_reused_only_for_the_cookie_it_was_seeded_from(tmp_path) -> None:
+    path = tmp_path / "state.json"
+    assert facebook.load_state(path, "c_user=1") is None
+
+    facebook.save_state(path, "c_user=1", {"cookies": [{"name": "xs", "value": "rotated"}]})
+    assert facebook.load_state(path, "c_user=1") == {"cookies": [{"name": "xs", "value": "rotated"}]}
+    assert facebook.load_state(path, "c_user=1; xs=new") is None
+    assert path.stat().st_mode & 0o777 == 0o600

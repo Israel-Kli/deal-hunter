@@ -11,6 +11,7 @@ The cookie header comes from the ``FACEBOOK_COOKIES`` env var (never the repo).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -18,6 +19,7 @@ import random
 import re
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Iterable
 
 log = logging.getLogger(__name__)
@@ -54,6 +56,31 @@ def parse_cookie_header(header: str) -> list[dict[str, Any]]:
             {"name": name, "value": value, "domain": ".facebook.com", "path": "/", "secure": True}
         )
     return cookies
+
+
+def _seed_id(cookie_header: str) -> str:
+    return hashlib.sha256(cookie_header.encode()).hexdigest()
+
+
+def load_state(path: Path | None, cookie_header: str) -> dict[str, Any] | None:
+    """Saved browser state, but only if it grew out of this exact FACEBOOK_COOKIES value.
+
+    Facebook rotates session cookies; replaying the original header goes stale, so each
+    run starts from the cookies the previous run ended with. A new header in the env
+    means the user re-exported, so it replaces the saved state.
+    """
+    if path is None or not path.exists():
+        return None
+    saved = json.loads(path.read_text())
+    if saved.get("seed") != _seed_id(cookie_header):
+        return None
+    return saved["state"]
+
+
+def save_state(path: Path, cookie_header: str, state: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"seed": _seed_id(cookie_header), "state": state}))
+    path.chmod(0o600)
 
 
 def extract_posts(response_bodies: Iterable[str]) -> list[FbPost]:
@@ -100,6 +127,7 @@ def collect_group_posts(
     cookie_header: str | None = None,
     scrolls: int = 3,
     pause_sec: float = 2.0,
+    state_path: Path | None = None,
 ) -> dict[str, list[FbPost]]:
     """Visit each group once and return its newest posts, keyed by group id."""
     from playwright.sync_api import sync_playwright
@@ -112,10 +140,15 @@ def collect_group_posts(
     with sync_playwright() as pw:
         browser = pw.chromium.launch(args=["--no-sandbox"])
         try:
+            state = load_state(state_path, cookie_header)
             ctx = browser.new_context(
-                locale="he-IL", viewport={"width": 1280, "height": 900}, user_agent=USER_AGENT
+                locale="he-IL",
+                viewport={"width": 1280, "height": 900},
+                user_agent=USER_AGENT,
+                storage_state=state,
             )
-            ctx.add_cookies(parse_cookie_header(cookie_header))
+            if state is None:
+                ctx.add_cookies(parse_cookie_header(cookie_header))
             ctx.route(
                 "**/*",
                 lambda route: route.abort()
@@ -130,6 +163,8 @@ def collect_group_posts(
                     time.sleep(random.uniform(5, 10))
                     posts = _scrape_group(ctx, group_id, scrolls=scrolls, pause_sec=pause_sec)
                 out[group_id] = posts
+            if state_path is not None:
+                save_state(state_path, cookie_header, ctx.storage_state())
                 # Spread requests out; fixed-rate polling of many groups looks automated.
                 time.sleep(random.uniform(3, 8))
         finally:
